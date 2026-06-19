@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { LoginResponse, PaginatedResponse, AdminUser, OverviewData } from '../types'
+import type { LoginResponse, PaginatedResponse, AdminUser, OverviewData, RunnerVerification, Payment } from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
 
@@ -41,7 +41,7 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY)
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const authLogin = async (phone: string, password: string): Promise<LoginResponse> => {
-  const { data } = await api.post<LoginResponse>('/auth/login', { phone, password })
+  const { data } = await api.post<LoginResponse>('/auth/login', { identifier: phone, password })
   return data
 }
 
@@ -99,6 +99,87 @@ export const updateUserStatus = async (
     { isActive },
   )
   return data.data.user
+}
+
+export interface UserDetailResponse {
+  user: AdminUser
+  recentErrands: Array<{ _id: string; title: string; status: string; amount: number; createdAt: string }>
+  recentPayments: Array<{ _id: string; type: string; amount: number; status: string; completedAt: string | null }>
+  verification: RunnerVerification | null
+}
+
+export const fetchUser = async (userId: string): Promise<UserDetailResponse> => {
+  const { data } = await api.get<{ status: string; data: UserDetailResponse }>(
+    `/admin/users/${userId}`,
+  )
+  return data.data
+}
+
+export const approveVerification = async (userId: string, notes?: string): Promise<RunnerVerification> => {
+  const { data } = await api.patch<{ status: string; data: { verification: RunnerVerification } }>(
+    `/admin/verifications/${userId}/approve`,
+    { notes },
+  )
+  return data.data.verification
+}
+
+export const rejectVerification = async (userId: string, notes: string): Promise<RunnerVerification> => {
+  const { data } = await api.patch<{ status: string; data: { verification: RunnerVerification } }>(
+    `/admin/verifications/${userId}/reject`,
+    { notes },
+  )
+  return data.data.verification
+}
+
+export const deleteUser = async (userId: string): Promise<void> => {
+  await api.delete(`/admin/users/${userId}`)
+}
+
+export const updateUser = async (
+  userId: string,
+  fields: {
+    isActive?: boolean
+    level?: number
+    name?: string
+    phone?: string
+    role?: string
+    rating?: number
+    cancelCount?: number
+  },
+): Promise<AdminUser> => {
+  const { data } = await api.patch<{ status: string; data: { user: AdminUser } }>(
+    `/admin/users/${userId}`,
+    fields,
+  )
+  return data.data.user
+}
+
+// ── Payments ──────────────────────────────────────────────────────────────────
+
+export interface PaymentsQuery {
+  page?: number
+  limit?: number
+  type?: string
+  status?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+export const fetchPayments = async (
+  query: PaymentsQuery = {},
+): Promise<PaginatedResponse<{ payments: Payment[] }>> => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.type) params.set('type', query.type)
+  if (query.status) params.set('status', query.status)
+  if (query.dateFrom) params.set('dateFrom', query.dateFrom)
+  if (query.dateTo) params.set('dateTo', query.dateTo)
+
+  const { data } = await api.get<PaginatedResponse<{ payments: Payment[] }>>(
+    `/admin/payments?${params.toString()}`,
+  )
+  return data
 }
 
 export default api

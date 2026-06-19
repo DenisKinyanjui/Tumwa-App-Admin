@@ -38,17 +38,17 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
+        <div className="rounded-2xl bg-[#248249]/10 p-8 shadow-sm ring-1 ring-gray-100">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/30">
-            <span className="text-2xl font-black text-white">T</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Tumwa Admin</h1>
-          <p className="mt-1 text-sm text-gray-500">Sign in to your admin account</p>
+          
+          <img src="/images/tumwa-crest-orange.svg" alt="Tumwa Logo" className="h-12 w-12 mx-auto mb-4 flex h-14 w-14 items-center justify-center" />
+          <h1 className="text-2xl font-bold text-gray-900">Tumwa App</h1>
+          <p className="mt-1 text-sm text-gray-500">Administration Panel</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-100">
+        <div className="">
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Error banner */}
             {error && (
@@ -136,6 +136,7 @@ export default function Login() {
         <p className="mt-6 text-center text-xs text-gray-400">
           Tumwa Platform &copy; {new Date().getFullYear()}
         </p>
+        </div>
       </div>
     </div>
   )

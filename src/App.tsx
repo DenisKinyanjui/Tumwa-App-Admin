@@ -5,6 +5,8 @@ import AdminLayout from './layouts/AdminLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Users from './pages/Users'
+import UserDetail from './pages/UserDetail'
+import Payments from './pages/Payments'
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/users" element={<Users />} />
+              <Route path="/users/:id" element={<UserDetail />} />
+              <Route path="/payments" element={<Payments />} />
             </Route>
           </Route>
 

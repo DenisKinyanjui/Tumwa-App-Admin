@@ -31,6 +31,24 @@ export interface AdminUser {
   updatedAt: string
 }
 
+// ── Runner Verification ───────────────────────────────────────────────────────
+
+export type VerificationStatus = 'pending' | 'approved' | 'rejected'
+
+export interface RunnerVerification {
+  _id: string
+  nationalId: string
+  idFrontUrl: string
+  idBackUrl: string
+  selfieUrl: string
+  meansOfTransport: 'motorbike' | 'bicycle' | 'car' | 'on_foot' | 'public_transport'
+  areasOfOperation: string[]
+  status: VerificationStatus
+  adminNotes: string | null
+  submittedAt: string
+  reviewedAt: string | null
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
@@ -59,6 +77,31 @@ export interface PaginatedResponse<T> {
   status: string
   pagination: Pagination
   data: T
+}
+
+// ── Payment ───────────────────────────────────────────────────────────────────
+
+export type PaymentType = 'errand_payment' | 'float_deposit' | 'withdrawal' | 'dispute_refund'
+export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'cancelled'
+
+export interface Payment {
+  _id: string
+  type: PaymentType
+  status: PaymentStatus
+  amount: number
+  phoneNumber: string
+  customer: { _id: string; name: string; phone: string } | null
+  runner: { _id: string; name: string; phone: string } | null
+  errand: { _id: string; title: string; amount: number } | null
+  mpesa: {
+    receiptNumber: string | null
+    checkoutRequestId: string | null
+    conversationId: string | null
+  }
+  failureReason: string | null
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 // ── Analytics Overview ────────────────────────────────────────────────────────

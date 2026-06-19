@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchUsers, updateUserStatus } from '../services/api'
+import { useNavigate } from 'react-router-dom'
+import { fetchUsers, updateUserStatus, deleteUser } from '../services/api'
 import type { AdminUser, UserRole } from '../types'
 
 // ── Role badge ────────────────────────────────────────────────────────────────
@@ -85,6 +86,53 @@ function ConfirmModal({ user, onConfirm, onCancel, loading }: ConfirmModalProps)
   )
 }
 
+// ── Delete confirm modal ──────────────────────────────────────────────────────
+
+interface DeleteModalProps {
+  user: AdminUser
+  onConfirm: () => void
+  onCancel: () => void
+  loading: boolean
+}
+
+function DeleteConfirmModal({ user, onConfirm, onCancel, loading }: DeleteModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+          <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 className="text-base font-bold text-gray-900">Delete User?</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          This will permanently delete{' '}
+          <span className="font-semibold text-gray-700">{user.name}</span> and all their
+          associated data, including errands, payments, disputes, and ratings.
+        </p>
+        <p className="mt-2 text-xs font-semibold text-red-500">This action cannot be undone.</p>
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+          >
+            {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+            Delete permanently
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 const ROLES = ['all', 'customer', 'runner', 'admin'] as const
@@ -97,6 +145,7 @@ const STATUS_OPTIONS = [
 const LIMIT = 20
 
 export default function Users() {
+  const navigate = useNavigate()
   const [users, setUsers]       = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]   = useState(true)
@@ -112,6 +161,11 @@ export default function Users() {
   const [confirmTarget, setConfirmTarget] = useState<AdminUser | null>(null)
   const [toggleLoading, setToggleLoading] = useState(false)
   const [toggleError, setToggleError]     = useState('')
+
+  // Delete action
+  const [deleteTarget, setDeleteTarget]   = useState<AdminUser | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError]     = useState('')
 
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -172,6 +226,22 @@ export default function Users() {
       setToggleError(err instanceof Error ? err.message : 'Failed to update user.')
     } finally {
       setToggleLoading(false)
+    }
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      await deleteUser(deleteTarget._id)
+      setUsers((prev) => prev.filter((u) => u._id !== deleteTarget._id))
+      setPagination((prev) => ({ ...prev, total: prev.total - 1 }))
+      setDeleteTarget(null)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete user.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -248,6 +318,17 @@ export default function Users() {
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {/* Delete error toast */}
+      {deleteError && (
+        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {deleteError}
+          <button onClick={() => setDeleteError('')} className="ml-auto text-xs font-semibold underline">Dismiss</button>
         </div>
       )}
 
@@ -364,18 +445,41 @@ export default function Users() {
 
                       {/* Actions */}
                       <td className="px-5 py-4">
-                        {user.role !== 'admin' && (
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setConfirmTarget(user)}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              user.isActive
-                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                                : 'bg-green-50 text-green-700 hover:bg-green-100'
-                            }`}
+                            onClick={() => navigate(`/users/${user._id}`)}
+                            title="View details"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
                           >
-                            {user.isActive ? 'Suspend' : 'Activate'}
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
                           </button>
-                        )}
+                          {user.role !== 'admin' && (
+                            <button
+                              onClick={() => setConfirmTarget(user)}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                user.isActive
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                  : 'bg-green-50 text-green-700 hover:bg-green-100'
+                              }`}
+                            >
+                              {user.isActive ? 'Suspend' : 'Activate'}
+                            </button>
+                          )}
+                          {user.role !== 'admin' && (
+                            <button
+                              onClick={() => setDeleteTarget(user)}
+                              title="Delete user permanently"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -409,13 +513,23 @@ export default function Users() {
         )}
       </div>
 
-      {/* Confirm modal */}
+      {/* Suspend / Activate confirm modal */}
       {confirmTarget && (
         <ConfirmModal
           user={confirmTarget}
           onConfirm={handleToggleConfirm}
           onCancel={() => { setConfirmTarget(null); setToggleError('') }}
           loading={toggleLoading}
+        />
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          user={deleteTarget}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => { setDeleteTarget(null); setDeleteError('') }}
+          loading={deleteLoading}
         />
       )}
     </div>
