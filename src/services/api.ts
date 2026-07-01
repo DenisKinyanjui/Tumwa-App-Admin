@@ -1,5 +1,18 @@
 import axios from 'axios'
-import type { LoginResponse, PaginatedResponse, AdminUser, OverviewData, RunnerVerification, Payment } from '../types'
+import type {
+  LoginResponse,
+  PaginatedResponse,
+  AdminUser,
+  OverviewData,
+  RunnerVerification,
+  Payment,
+  Errand,
+  ErrandAnalytics,
+  PaymentAnalytics,
+  SystemStatusService,
+  AdminDispute,
+  ResolutionOutcome,
+} from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
 
@@ -63,6 +76,27 @@ export const fetchOverview = async (period = 'month'): Promise<OverviewData> => 
   return data.data
 }
 
+export const fetchErrandAnalytics = async (period = 'month'): Promise<ErrandAnalytics> => {
+  const { data } = await api.get<{ status: string; data: ErrandAnalytics }>(
+    `/admin/analytics/errands?period=${period}`,
+  )
+  return data.data
+}
+
+export const fetchPaymentAnalytics = async (period = 'year'): Promise<PaymentAnalytics> => {
+  const { data } = await api.get<{ status: string; data: PaymentAnalytics }>(
+    `/admin/analytics/payments?period=${period}`,
+  )
+  return data.data
+}
+
+export const fetchSystemStatus = async (): Promise<SystemStatusService[]> => {
+  const { data } = await api.get<{ status: string; data: { services: SystemStatusService[] } }>(
+    '/admin/system-status',
+  )
+  return data.data.services
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export interface UsersQuery {
@@ -71,6 +105,8 @@ export interface UsersQuery {
   role?: string
   isActive?: boolean | ''
   search?: string
+  sortBy?: 'createdAt' | 'rating' | 'completedErrands' | 'name'
+  order?: 'asc' | 'desc'
 }
 
 export const fetchUsers = async (
@@ -83,6 +119,8 @@ export const fetchUsers = async (
   if (query.isActive !== '' && query.isActive !== undefined)
     params.set('isActive', String(query.isActive))
   if (query.search) params.set('search', query.search)
+  if (query.sortBy) params.set('sortBy', query.sortBy)
+  if (query.order) params.set('order', query.order)
 
   const { data } = await api.get<PaginatedResponse<{ users: AdminUser[] }>>(
     `/admin/users?${params.toString()}`,
@@ -113,6 +151,13 @@ export const fetchUser = async (userId: string): Promise<UserDetailResponse> => 
     `/admin/users/${userId}`,
   )
   return data.data
+}
+
+export const fetchVerification = async (userId: string): Promise<RunnerVerification> => {
+  const { data } = await api.get<{ status: string; data: { verification: RunnerVerification } }>(
+    `/admin/verifications/${userId}`,
+  )
+  return data.data.verification
 }
 
 export const approveVerification = async (userId: string, notes?: string): Promise<RunnerVerification> => {
@@ -180,6 +225,112 @@ export const fetchPayments = async (
     `/admin/payments?${params.toString()}`,
   )
   return data
+}
+
+// ── Errands ───────────────────────────────────────────────────────────────────
+
+export interface ErrandsQuery {
+  page?: number
+  limit?: number
+  status?: string
+  isPaid?: boolean | ''
+  dateFrom?: string
+  dateTo?: string
+}
+
+export const fetchErrands = async (
+  query: ErrandsQuery = {},
+): Promise<PaginatedResponse<{ errands: Errand[] }>> => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.status) params.set('status', query.status)
+  if (query.isPaid !== '' && query.isPaid !== undefined) params.set('isPaid', String(query.isPaid))
+  if (query.dateFrom) params.set('dateFrom', query.dateFrom)
+  if (query.dateTo) params.set('dateTo', query.dateTo)
+
+  const { data } = await api.get<PaginatedResponse<{ errands: Errand[] }>>(
+    `/admin/errands?${params.toString()}`,
+  )
+  return data
+}
+
+export interface ErrandDetailResponse {
+  errand: Errand
+  payment: Payment | null
+  dispute: { _id: string; status: string; reason: string } | null
+}
+
+export const fetchErrand = async (id: string): Promise<ErrandDetailResponse> => {
+  const { data } = await api.get<{ status: string; data: ErrandDetailResponse }>(
+    `/admin/errands/${id}`,
+  )
+  return data.data
+}
+
+export const cancelErrandAdmin = async (id: string): Promise<Errand> => {
+  const { data } = await api.patch<{ status: string; data: { errand: Errand } }>(
+    `/errands/${id}/cancel`,
+  )
+  return data.data.errand
+}
+
+export const assignRunnerAdmin = async (id: string, runnerId: string): Promise<Errand> => {
+  const { data } = await api.patch<{ status: string; data: { errand: Errand } }>(
+    `/errands/${id}/admin-assign`,
+    { runnerId },
+  )
+  return data.data.errand
+}
+
+// ── Disputes ──────────────────────────────────────────────────────────────────
+
+export const fetchDisputes = async (status?: string): Promise<AdminDispute[]> => {
+  const params = status ? `?status=${status}` : ''
+  const { data } = await api.get<{ status: string; data: { disputes: AdminDispute[] } }>(
+    `/disputes${params}`,
+  )
+  return data.data.disputes
+}
+
+export const fetchDisputeById = async (id: string): Promise<AdminDispute> => {
+  const { data } = await api.get<{ status: string; data: { dispute: AdminDispute } }>(
+    `/disputes/${id}`,
+  )
+  return data.data.dispute
+}
+
+export const markDisputeUnderReview = async (id: string): Promise<AdminDispute> => {
+  const { data } = await api.patch<{ status: string; data: { dispute: AdminDispute } }>(
+    `/disputes/${id}/review`,
+  )
+  return data.data.dispute
+}
+
+export interface ResolveDisputePayload {
+  outcome: ResolutionOutcome
+  notes?: string
+  penaltyAmount?: number
+  refundAmount?: number
+}
+
+export const resolveDisputeAdmin = async (
+  id: string,
+  payload: ResolveDisputePayload,
+): Promise<AdminDispute> => {
+  const { data } = await api.patch<{ status: string; data: { dispute: AdminDispute } }>(
+    `/disputes/${id}/resolve`,
+    payload,
+  )
+  return data.data.dispute
+}
+
+export const rejectDisputeAdmin = async (id: string, notes?: string): Promise<AdminDispute> => {
+  const { data } = await api.patch<{ status: string; data: { dispute: AdminDispute } }>(
+    `/disputes/${id}/reject`,
+    { notes },
+  )
+  return data.data.dispute
 }
 
 export default api

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchUser, updateUser, approveVerification, rejectVerification } from '../services/api'
+import { fetchUser, updateUser, approveVerification, rejectVerification, fetchVerification } from '../services/api'
 import type { UserDetailResponse } from '../services/api'
 import type { UserRole, RunnerVerification, VerificationStatus } from '../types'
+import { useBadges } from '../context/BadgeContext'
 
 // ── Shared badge components ───────────────────────────────────────────────────
 
@@ -90,12 +91,18 @@ interface VerificationCardProps {
   verification: RunnerVerification
   userId: string
   onUpdate: (v: RunnerVerification) => void
+  onRefresh: () => void
+  onVerificationActioned: () => void
+  refreshing?: boolean
 }
 
-function RunnerVerificationCard({ verification, userId, onUpdate }: VerificationCardProps) {
+function RunnerVerificationCard({ verification, userId, onUpdate, onRefresh, onVerificationActioned, refreshing }: VerificationCardProps) {
   const [notes, setNotes] = useState(verification.adminNotes ?? '')
   const [acting, setActing] = useState<'approve' | 'reject' | null>(null)
   const [actionError, setActionError] = useState('')
+
+  // Sync notes textarea when parent refreshes and passes a new verification object
+  useEffect(() => { setNotes(verification.adminNotes ?? '') }, [verification.adminNotes])
 
   const handleApprove = async () => {
     setActing('approve')
@@ -103,6 +110,7 @@ function RunnerVerificationCard({ verification, userId, onUpdate }: Verification
     try {
       const updated = await approveVerification(userId, notes || undefined)
       onUpdate(updated)
+      onVerificationActioned()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Action failed.')
     } finally {
@@ -117,6 +125,7 @@ function RunnerVerificationCard({ verification, userId, onUpdate }: Verification
     try {
       const updated = await rejectVerification(userId, notes)
       onUpdate(updated)
+      onVerificationActioned()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Action failed.')
     } finally {
@@ -129,7 +138,19 @@ function RunnerVerificationCard({ verification, userId, onUpdate }: Verification
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <h4 className="text-sm font-bold uppercase tracking-wide text-gray-900">Runner Verification</h4>
-        <VerificationBadge status={verification.status} />
+        <div className="flex items-center gap-2">
+          <VerificationBadge status={verification.status} />
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            title="Refresh verification documents"
+            className="flex items-center justify-center rounded-lg border border-gray-200 p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 disabled:opacity-40"
+          >
+            <svg className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Identity */}
@@ -277,11 +298,13 @@ interface EditState {
 export default function UserDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { decrementPendingVerifications } = useBadges()
 
   const [detail, setDetail] = useState<UserDetailResponse | null>(null)
   const [verification, setVerification] = useState<RunnerVerification | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refreshingVerification, setRefreshingVerification] = useState(false)
 
   const [form, setForm] = useState<EditState>({
     name: '', phone: '', role: 'customer',
@@ -312,6 +335,19 @@ export default function UserDetail() {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
+  }, [id])
+
+  const handleRefreshVerification = useCallback(async () => {
+    if (!id) return
+    setRefreshingVerification(true)
+    try {
+      const updated = await fetchVerification(id)
+      setVerification(updated)
+    } catch {
+      // Ignore — existing data stays visible
+    } finally {
+      setRefreshingVerification(false)
+    }
   }, [id])
 
   const set = <K extends keyof EditState>(key: K, value: EditState[K]) =>
@@ -367,11 +403,11 @@ export default function UserDetail() {
   if (error || !detail) {
     return (
       <div className="space-y-4">
-        <button onClick={() => navigate('/users')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Users
+          Back
         </button>
         <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -391,7 +427,7 @@ export default function UserDetail() {
       {/* Page header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate('/users')}
+          onClick={() => navigate(-1)}
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -602,6 +638,9 @@ export default function UserDetail() {
               verification={verification}
               userId={user._id}
               onUpdate={(v) => setVerification(v)}
+              onRefresh={handleRefreshVerification}
+              onVerificationActioned={decrementPendingVerifications}
+              refreshing={refreshingVerification}
             />
           )}
           {user.role === 'runner' && !verification && (
@@ -636,12 +675,17 @@ export default function UserDetail() {
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Amount</th>
                       <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date</th>
+                      <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {recentErrands.map((e) => (
-                      <tr key={e._id} className="hover:bg-gray-50/50">
-                        <td className="max-w-[180px] truncate px-5 py-3 text-sm text-gray-900">{e.title}</td>
+                      <tr
+                        key={e._id}
+                        onClick={() => navigate(`/errands/${e._id}`)}
+                        className="cursor-pointer hover:bg-gray-50/50"
+                      >
+                        <td className="max-w-[180px] truncate px-5 py-3 text-sm font-medium text-gray-900">{e.title}</td>
                         <td className="px-5 py-3">
                           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${ERRAND_STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-500'}`}>
                             {e.status}
@@ -649,6 +693,11 @@ export default function UserDetail() {
                         </td>
                         <td className="px-5 py-3 text-sm text-gray-700">{fmtCurrency(e.amount)}</td>
                         <td className="px-5 py-3 text-sm text-gray-500">{fmt(e.createdAt)}</td>
+                        <td className="px-5 py-3">
+                          <svg className="h-4 w-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

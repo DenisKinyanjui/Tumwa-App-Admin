@@ -3,6 +3,35 @@ import { useNavigate } from 'react-router-dom'
 import { fetchUsers, updateUserStatus, deleteUser } from '../services/api'
 import type { AdminUser } from '../types'
 
+// ── Online badge ──────────────────────────────────────────────────────────────
+
+type AvailabilityStatus = 'offline' | 'available' | 'busy' | 'receiving_request' | undefined
+
+function OnlineBadge({ status }: { status: AvailabilityStatus }) {
+  if (status === 'available' || status === 'receiving_request') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+        Online
+      </span>
+    )
+  }
+  if (status === 'busy') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Busy
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+      Offline
+    </span>
+  )
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
@@ -12,6 +41,24 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
     }`}>
       <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-red-400'}`} />
       {isActive ? 'Active' : 'Suspended'}
+    </span>
+  )
+}
+
+// ── Verification badge ─────────────────────────────────────────────────────────
+
+const VERIFICATION_STYLES: Record<string, string> = {
+  none:     'bg-gray-100 text-gray-500',
+  pending:  'bg-yellow-50 text-yellow-700',
+  approved: 'bg-green-50 text-green-700',
+  rejected: 'bg-red-50 text-red-600',
+}
+
+function VerificationBadge({ status }: { status?: string }) {
+  const s = status ?? 'none'
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${VERIFICATION_STYLES[s] ?? VERIFICATION_STYLES.none}`}>
+      {s === 'none' ? 'Not submitted' : s}
     </span>
   )
 }
@@ -43,7 +90,7 @@ function ConfirmModal({ user, onConfirm, onCancel, loading }: ConfirmModalProps)
             </svg>
           )}
         </div>
-        <h3 className="text-base font-bold text-gray-900">{action} User?</h3>
+        <h3 className="text-base font-bold text-gray-900">{action} Runner?</h3>
         <p className="mt-1 text-sm text-gray-500">
           Are you sure you want to {action.toLowerCase()} <span className="font-semibold text-gray-700">{user.name}</span>?
           {user.isActive && ' They will lose access to the platform immediately.'}
@@ -88,7 +135,7 @@ function DeleteConfirmModal({ user, onConfirm, onCancel, loading }: DeleteModalP
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         </div>
-        <h3 className="text-base font-bold text-gray-900">Delete User?</h3>
+        <h3 className="text-base font-bold text-gray-900">Delete Runner?</h3>
         <p className="mt-1 text-sm text-gray-500">
           This will permanently delete{' '}
           <span className="font-semibold text-gray-700">{user.name}</span> and all their
@@ -117,7 +164,7 @@ function DeleteConfirmModal({ user, onConfirm, onCancel, loading }: DeleteModalP
   )
 }
 
-// ── Users ─────────────────────────────────────────────────────────────────────
+// ── Runners ───────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = [
   { label: 'All',       value: '' as const },
@@ -125,11 +172,17 @@ const STATUS_OPTIONS = [
   { label: 'Suspended', value: false as const },
 ] as const
 
+const SORT_OPTIONS = [
+  { label: 'Newest',         sortBy: 'createdAt'        as const, order: 'desc' as const },
+  { label: 'Most Completed', sortBy: 'completedErrands'  as const, order: 'desc' as const },
+  { label: 'Highest Rated',  sortBy: 'rating'            as const, order: 'desc' as const },
+]
+
 const LIMIT = 20
 
-export default function Users() {
+export default function Runners() {
   const navigate = useNavigate()
-  const [users, setUsers]       = useState<AdminUser[]>([])
+  const [runners, setRunners] = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -137,6 +190,7 @@ export default function Users() {
   // Filters
   const [search, setSearch]   = useState('')
   const [status, setStatus]   = useState<boolean | ''>('')
+  const [sortIndex, setSortIndex] = useState(0)
   const [page, setPage]       = useState(1)
 
   // Toggle action
@@ -151,18 +205,21 @@ export default function Users() {
 
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback((p: number, q: string, s: boolean | '') => {
+  const load = useCallback((p: number, q: string, s: boolean | '', sortIdx: number) => {
     setLoading(true)
     setError('')
+    const sort = SORT_OPTIONS[sortIdx]
     fetchUsers({
       page: p,
       limit: LIMIT,
-      role: 'customer',
+      role: 'runner',
       isActive: s,
       search: q || undefined,
+      sortBy: sort.sortBy,
+      order: sort.order,
     })
       .then((res) => {
-        setUsers(res.data.users)
+        setRunners(res.data.users)
         setPagination({
           total: res.pagination.total,
           page: res.pagination.page,
@@ -174,20 +231,25 @@ export default function Users() {
   }, [])
 
   useEffect(() => {
-    load(page, search, status)
-  }, [page, status, load]) // search handled via debounce below
+    load(page, search, status, sortIndex)
+  }, [page, status, sortIndex, load]) // search handled via debounce below
 
   const handleSearchChange = (val: string) => {
     setSearch(val)
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
     searchDebounce.current = setTimeout(() => {
       setPage(1)
-      load(1, val, status)
+      load(1, val, status, sortIndex)
     }, 350)
   }
 
   const handleStatusChange = (s: boolean | '') => {
     setStatus(s)
+    setPage(1)
+  }
+
+  const handleSortChange = (idx: number) => {
+    setSortIndex(idx)
     setPage(1)
   }
 
@@ -197,10 +259,10 @@ export default function Users() {
     setToggleError('')
     try {
       const updated = await updateUserStatus(confirmTarget._id, !confirmTarget.isActive)
-      setUsers((prev) => prev.map((u) => (u._id === updated._id ? updated : u)))
+      setRunners((prev) => prev.map((u) => (u._id === updated._id ? updated : u)))
       setConfirmTarget(null)
     } catch (err) {
-      setToggleError(err instanceof Error ? err.message : 'Failed to update user.')
+      setToggleError(err instanceof Error ? err.message : 'Failed to update runner.')
     } finally {
       setToggleLoading(false)
     }
@@ -212,11 +274,11 @@ export default function Users() {
     setDeleteError('')
     try {
       await deleteUser(deleteTarget._id)
-      setUsers((prev) => prev.filter((u) => u._id !== deleteTarget._id))
+      setRunners((prev) => prev.filter((u) => u._id !== deleteTarget._id))
       setPagination((prev) => ({ ...prev, total: prev.total - 1 }))
       setDeleteTarget(null)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete user.')
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete runner.')
     } finally {
       setDeleteLoading(false)
     }
@@ -229,9 +291,9 @@ export default function Users() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Customers</h2>
+        <h2 className="text-xl font-bold text-gray-900">Runners</h2>
         <p className="mt-0.5 text-sm text-gray-500">
-          {pagination.total > 0 ? `${pagination.total} total customers` : 'Manage platform customers'}
+          {pagination.total > 0 ? `${pagination.total} total runners` : 'Manage platform runners'}
         </p>
       </div>
 
@@ -249,6 +311,21 @@ export default function Users() {
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
           />
+        </div>
+
+        {/* Sort */}
+        <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
+          {SORT_OPTIONS.map((opt, idx) => (
+            <button
+              key={opt.label}
+              onClick={() => handleSortChange(idx)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                sortIndex === idx ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {/* Status filter */}
@@ -275,7 +352,7 @@ export default function Users() {
           </svg>
           {error}
           <button
-            onClick={() => load(page, search, status)}
+            onClick={() => load(page, search, status, sortIndex)}
             className="ml-auto text-xs font-semibold underline"
           >
             Retry
@@ -311,8 +388,12 @@ export default function Users() {
           <table className="min-w-full divide-y divide-gray-100">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Customer</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Runner</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Phone</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Online</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Rating</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Errands</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Verification</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Joined</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
@@ -322,61 +403,93 @@ export default function Users() {
               {loading
                 ? Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 5 }).map((__, j) => (
+                      {Array.from({ length: 9 }).map((__, j) => (
                         <td key={j} className="px-5 py-4">
                           <div className="h-4 animate-pulse rounded bg-gray-100" />
                         </td>
                       ))}
                     </tr>
                   ))
-                : users.length === 0
+                : runners.length === 0
                 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-16 text-center">
+                      <td colSpan={9} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-2 text-gray-400">
                           <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
-                          <p className="text-sm font-medium">No customers found</p>
+                          <p className="text-sm font-medium">No runners found</p>
                           <p className="text-xs">Try adjusting your search or filters</p>
                         </div>
                       </td>
                     </tr>
                   )
-                : users.map((user) => (
-                    <tr key={user._id} className="transition-colors hover:bg-gray-50/50">
-                      {/* User */}
+                : runners.map((runner) => (
+                    <tr key={runner._id} className="transition-colors hover:bg-gray-50/50">
+                      {/* Runner */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-bold text-primary-600">
-                            {user.name.charAt(0).toUpperCase()}
+                            {runner.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">{user.name}</p>
+                            <p className="truncate text-sm font-semibold text-gray-900">{runner.name}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Phone */}
                       <td className="px-5 py-4">
-                        <span className="text-sm text-gray-600">{user.phone}</span>
+                        <span className="text-sm text-gray-600">{runner.phone}</span>
+                      </td>
+
+                      {/* Online */}
+                      <td className="px-5 py-4">
+                        <OnlineBadge status={runner.availability?.status} />
+                      </td>
+
+                      {/* Rating */}
+                      <td className="px-5 py-4">
+                        {runner.rating > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <svg className="h-3.5 w-3.5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                            <span className="text-sm text-gray-700">{runner.rating.toFixed(1)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Errands */}
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-gray-700">{runner.completedErrands} completed</span>
+                        {runner.disputesAgainst > 0 && (
+                          <span className="ml-2 text-xs text-red-500">{runner.disputesAgainst} disputes</span>
+                        )}
+                      </td>
+
+                      {/* Verification */}
+                      <td className="px-5 py-4">
+                        <VerificationBadge status={runner.verificationStatus} />
                       </td>
 
                       {/* Status */}
                       <td className="px-5 py-4">
-                        <StatusBadge isActive={user.isActive} />
+                        <StatusBadge isActive={runner.isActive} />
                       </td>
 
                       {/* Joined */}
                       <td className="px-5 py-4">
-                        <span className="text-sm text-gray-500">{fmt(user.createdAt)}</span>
+                        <span className="text-sm text-gray-500">{fmt(runner.createdAt)}</span>
                       </td>
 
                       {/* Actions */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => navigate(`/users/${user._id}`)}
+                            onClick={() => navigate(`/users/${runner._id}`)}
                             title="View details"
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
                           >
@@ -386,18 +499,18 @@ export default function Users() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => setConfirmTarget(user)}
+                            onClick={() => setConfirmTarget(runner)}
                             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              user.isActive
+                              runner.isActive
                                 ? 'bg-red-50 text-red-600 hover:bg-red-100'
                                 : 'bg-green-50 text-green-700 hover:bg-green-100'
                             }`}
                           >
-                            {user.isActive ? 'Suspend' : 'Activate'}
+                            {runner.isActive ? 'Suspend' : 'Activate'}
                           </button>
                           <button
-                            onClick={() => setDeleteTarget(user)}
-                            title="Delete user permanently"
+                            onClick={() => setDeleteTarget(runner)}
+                            title="Delete runner permanently"
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
