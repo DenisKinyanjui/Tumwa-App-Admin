@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { emitSessionExpired } from './sessionEvents'
 import type {
   LoginResponse,
   PaginatedResponse,
@@ -32,15 +33,73 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// ── Silent refresh-and-retry, with a queue so concurrent 401s only trigger
+// one /auth/refresh call. The refresh token itself travels as an httpOnly
+// cookie (sent automatically via withCredentials) — nothing to store here.
+let isRefreshing = false
+let pendingQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = []
+
+const resolveQueue = (token: string) => {
+  pendingQueue.forEach(({ resolve }) => resolve(token))
+  pendingQueue = []
+}
+
+const rejectQueue = (err: unknown) => {
+  pendingQueue.forEach(({ reject }) => reject(err))
+  pendingQueue = []
+}
+
 // Normalize error messages from backend { status: 'fail', message: '...' }
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    const originalRequest = err.config
+    const isAuthenticated = !!originalRequest?.headers?.Authorization
+    const isRefreshCall = originalRequest?.url?.includes('/auth/refresh')
+
+    if (err.response?.status === 401 && isAuthenticated && !isRefreshCall && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({
+            resolve: (token: string) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`
+              originalRequest._retry = true
+              resolve(api(originalRequest))
+            },
+            reject,
+          })
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        const { data } = await api.post('/auth/refresh')
+        saveToken(data.accessToken)
+
+        isRefreshing = false
+        resolveQueue(data.accessToken)
+
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
+        return api(originalRequest)
+      } catch (refreshErr) {
+        isRefreshing = false
+        rejectQueue(refreshErr)
+
+        // The refresh cookie itself is invalid/expired — genuine session expiry.
+        const msg = err.response?.data?.message ?? 'Your session has expired. Please log in again.'
+        emitSessionExpired(msg)
+        return Promise.reject(new Error(msg))
+      }
+    }
+
     const msg =
       err.response?.data?.message ??
       err.response?.data?.error ??
       err.message ??
       'An unexpected error occurred'
+
     return Promise.reject(new Error(msg))
   },
 )
@@ -331,6 +390,24 @@ export const rejectDisputeAdmin = async (id: string, notes?: string): Promise<Ad
     { notes },
   )
   return data.data.dispute
+}
+
+// ── Legal content ─────────────────────────────────────────────────────────────
+
+export interface LegalContent {
+  content: string
+  version: number
+  updatedAt: string | null
+}
+
+export const fetchTerms = async (): Promise<LegalContent> => {
+  const { data } = await api.get<{ status: string; data: LegalContent }>('/admin/legal/terms')
+  return data.data
+}
+
+export const updateTerms = async (content: string): Promise<LegalContent> => {
+  const { data } = await api.put<{ status: string; data: LegalContent }>('/admin/legal/terms', { content })
+  return data.data
 }
 
 export default api
