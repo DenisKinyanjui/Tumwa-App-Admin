@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { to: '/payments', label: 'Transactions', icon: Receipt },
   { to: '/disputes', label: 'Disputes', icon: AlertTriangle, badgeKey: 'disputes' },
   { to: '/withdrawals', label: 'Withdrawals', icon: ArrowDownToLine },
-  { to: '/wallet-float', label: 'Wallet Float', icon: Wallet },
+  { to: '/working-capital', label: 'Working Capital', icon: Wallet },
   { to: '/promo-codes', label: 'Promo Codes', icon: Tag },
   { to: '/locations', label: 'Locations', icon: MapPin },
   { to: '/notifications', label: 'Notifications', icon: Bell },

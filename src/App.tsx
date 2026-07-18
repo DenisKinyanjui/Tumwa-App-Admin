@@ -13,6 +13,7 @@ import Payments from './pages/Payments'
 import Errands from './pages/Errands'
 import ErrandDetail from './pages/ErrandDetail'
 import Disputes from './pages/Disputes'
+import WorkingCapital from './pages/WorkingCapital'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
                 <Route path="/errands" element={<Errands />} />
                 <Route path="/errands/:id" element={<ErrandDetail />} />
                 <Route path="/disputes" element={<Disputes />} />
+                <Route path="/working-capital" element={<WorkingCapital />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
             </Route>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchErrand } from '../services/api'
+import { fetchErrand, excuseCancellationAdmin } from '../services/api'
 import type { ErrandDetailResponse } from '../services/api'
 import type { ErrandStatus } from '../types'
 
@@ -131,6 +131,8 @@ export default function ErrandDetail() {
   const [data, setData] = useState<ErrandDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [excusing, setExcusing] = useState(false)
+  const [excuseError, setExcuseError] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -178,6 +180,20 @@ export default function ErrandDetail() {
 
   const { errand, payment, dispute } = data
 
+  const handleExcuseCancellation = async () => {
+    if (!id) return
+    setExcusing(true)
+    setExcuseError('')
+    try {
+      const updated = await excuseCancellationAdmin(id)
+      setData((prev) => (prev ? { ...prev, errand: updated } : prev))
+    } catch (err) {
+      setExcuseError(err instanceof Error ? err.message : 'Failed to excuse cancellation.')
+    } finally {
+      setExcusing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
 
@@ -214,15 +230,30 @@ export default function ErrandDetail() {
           <span className={`rounded-full px-2.5 py-0.5 font-semibold ${errand.isPaid ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
             {errand.isPaid ? 'Paid' : 'Unpaid'}
           </span>
-          {errand.floatUsed && (
-            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 font-semibold text-blue-700">Float used</span>
+          {errand.capacityUsed && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 font-semibold text-blue-700">Capacity used</span>
           )}
           {errand.cancelledBy && (
             <span className="rounded-full bg-red-50 px-2.5 py-0.5 font-semibold text-red-600">
               Cancelled by {errand.cancelledBy}
             </span>
           )}
+          {errand.cancelledBy === 'runner' && errand.excusedCancellation && (
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 font-semibold text-gray-600">Excused</span>
+          )}
         </div>
+        {errand.cancelledBy === 'runner' && !errand.excusedCancellation && errand.cancelledByRunnerId && (
+          <div className="mt-3">
+            <button
+              onClick={handleExcuseCancellation}
+              disabled={excusing}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              {excusing ? 'Excusing…' : 'Excuse cancellation (restore working capital limit)'}
+            </button>
+            {excuseError && <p className="mt-1.5 text-xs text-red-600">{excuseError}</p>}
+          </div>
+        )}
       </div>
 
       {/* Main grid */}
@@ -310,14 +341,19 @@ export default function ErrandDetail() {
       </div>
 
       {/* Proof of completion */}
-      {errand.proofOfCompletion ? (
+      {errand.proofPhotoUrl ? (
         <Section title="Proof of Completion">
-          <ProofImage url={errand.proofOfCompletion} />
+          <ProofImage url={errand.proofPhotoUrl} />
+          {errand.proofOfCompletion && (
+            <p className="mt-2 text-sm text-gray-600">{errand.proofOfCompletion}</p>
+          )}
         </Section>
       ) : (
-        ['completed', 'confirmed'].includes(errand.status) && (
+        (errand.proofOfCompletion || ['completed', 'confirmed'].includes(errand.status)) && (
           <Section title="Proof of Completion">
-            <p className="text-sm text-gray-400">No proof image was uploaded for this errand.</p>
+            {errand.proofOfCompletion
+              ? <p className="text-sm text-gray-600">{errand.proofOfCompletion}</p>
+              : <p className="text-sm text-gray-400">No proof image was uploaded for this errand.</p>}
           </Section>
         )
       )}

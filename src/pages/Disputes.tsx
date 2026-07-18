@@ -335,6 +335,11 @@ function DetailPanel({
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                  {resolveForm.outcome === 'runner_at_fault' && (
+                    <p className="text-xs text-amber-700">
+                      This will decrease the runner's Working Capital Limit.
+                    </p>
+                  )}
                   {resolveForm.outcome === 'partial' && (
                     <input
                       type="number"

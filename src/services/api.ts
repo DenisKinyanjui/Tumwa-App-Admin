@@ -13,6 +13,8 @@ import type {
   SystemStatusService,
   AdminDispute,
   ResolutionOutcome,
+  AppSettings,
+  WorkingCapitalSettings,
 } from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
@@ -164,7 +166,7 @@ export interface UsersQuery {
   role?: string
   isActive?: boolean | ''
   search?: string
-  sortBy?: 'createdAt' | 'rating' | 'completedErrands' | 'name'
+  sortBy?: 'createdAt' | 'rating' | 'completedErrands' | 'name' | 'workingCapital.limit'
   order?: 'asc' | 'desc'
 }
 
@@ -342,6 +344,15 @@ export const assignRunnerAdmin = async (id: string, runnerId: string): Promise<E
   return data.data.errand
 }
 
+// Marks a runner-initiated cancellation as not the runner's fault, reversing
+// the working-capital-limit decrease already applied at cancellation time.
+export const excuseCancellationAdmin = async (id: string): Promise<Errand> => {
+  const { data } = await api.patch<{ status: string; data: { errand: Errand } }>(
+    `/errands/${id}/excuse-cancellation`,
+  )
+  return data.data.errand
+}
+
 // ── Disputes ──────────────────────────────────────────────────────────────────
 
 export const fetchDisputes = async (status?: string): Promise<AdminDispute[]> => {
@@ -408,6 +419,30 @@ export const fetchTerms = async (): Promise<LegalContent> => {
 export const updateTerms = async (content: string): Promise<LegalContent> => {
   const { data } = await api.put<{ status: string; data: LegalContent }>('/admin/legal/terms', { content })
   return data.data
+}
+
+// ── App settings ──────────────────────────────────────────────────────────────
+
+export const fetchSettings = async (): Promise<AppSettings> => {
+  const { data } = await api.get<{ status: string; data: AppSettings }>('/admin/settings')
+  return data.data
+}
+
+export const updateSettings = async (
+  workingCapital: Partial<WorkingCapitalSettings>,
+): Promise<AppSettings> => {
+  const { data } = await api.patch<{ status: string; data: AppSettings }>('/admin/settings', { workingCapital })
+  return data.data
+}
+
+// Manually overrides a runner's Working Capital Limit (not their `used` value,
+// which is auto-tracked from active errands).
+export const setRunnerWorkingCapital = async (userId: string, limit: number): Promise<AdminUser> => {
+  const { data } = await api.patch<{ status: string; data: { user: AdminUser } }>(
+    `/admin/users/${userId}/working-capital`,
+    { limit },
+  )
+  return data.data.user
 }
 
 export default api

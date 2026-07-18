@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { fetchUsers, updateUserStatus, deleteUser } from '../services/api'
 import type { AdminUser } from '../types'
 
+function fmtCurrency(n: number) {
+  return `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
 // ── Online badge ──────────────────────────────────────────────────────────────
 
 type AvailabilityStatus = 'offline' | 'available' | 'busy' | 'receiving_request' | undefined
@@ -393,6 +397,7 @@ export default function Runners() {
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Online</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Rating</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Errands</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Available Capacity</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Verification</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Joined</th>
@@ -468,6 +473,14 @@ export default function Runners() {
                         {runner.disputesAgainst > 0 && (
                           <span className="ml-2 text-xs text-red-500">{runner.disputesAgainst} disputes</span>
                         )}
+                      </td>
+
+                      {/* Available Capacity */}
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-gray-700">
+                          {fmtCurrency(Math.max(0, (runner.workingCapital?.limit ?? 0) - (runner.workingCapital?.used ?? 0)))}
+                        </span>
+                        <span className="ml-1 text-xs text-gray-400">/ {fmtCurrency(runner.workingCapital?.limit ?? 0)}</span>
                       </td>
 
                       {/* Verification */}

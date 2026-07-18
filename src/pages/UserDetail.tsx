@@ -653,10 +653,20 @@ export default function UserDetail() {
           {/* Wallet (read-only) */}
           <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
             <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-900">Wallet</h4>
-            <WalletRow label="Float Balance"  value={fmtCurrency(user.wallet.floatBalance)} />
-            <WalletRow label="Held Float"     value={fmtCurrency(user.wallet.heldFloat)} />
-            <WalletRow label="Earnings"       value={fmtCurrency(user.wallet.earnings)} />
-            <WalletRow label="Trust Balance"  value={fmtCurrency(user.wallet.trustBalance)} />
+            {user.role === 'runner' ? (
+              <>
+                <WalletRow label="Working Capital Limit" value={fmtCurrency(user.workingCapital?.limit ?? 0)} />
+                <WalletRow label="Active Capacity"        value={fmtCurrency(user.workingCapital?.used ?? 0)} />
+                <WalletRow label="Available Capacity"     value={fmtCurrency(Math.max(0, (user.workingCapital?.limit ?? 0) - (user.workingCapital?.used ?? 0)))} />
+                <WalletRow label="Earnings"               value={fmtCurrency(user.wallet.earnings)} />
+                <WalletRow label="Trust Balance"          value={fmtCurrency(user.wallet.trustBalance)} />
+              </>
+            ) : (
+              <>
+                <WalletRow label="Wallet Credit"  value={fmtCurrency(user.customerWallet?.balance ?? 0)} />
+                <WalletRow label="Trust Balance"  value={fmtCurrency(user.wallet.trustBalance)} />
+              </>
+            )}
           </div>
 
           {/* Recent Errands */}

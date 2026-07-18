@@ -20,9 +20,9 @@ const fmtDateTime = (d: string) =>
 
 const TYPE_META: Record<PaymentType, { label: string; className: string }> = {
   errand_payment: { label: 'Errand Pay',     className: 'bg-blue-50 text-blue-700' },
-  float_deposit:  { label: 'Float Deposit',  className: 'bg-purple-50 text-purple-700' },
   withdrawal:     { label: 'Withdrawal',     className: 'bg-amber-50 text-amber-700' },
   dispute_refund: { label: 'Dispute Refund', className: 'bg-teal-50 text-teal-700' },
+  wallet_credit:  { label: 'Wallet Credit',  className: 'bg-purple-50 text-purple-700' },
 }
 
 function TypeBadge({ type }: { type: PaymentType }) {
@@ -58,9 +58,9 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
 const TYPE_FILTERS = [
   { label: 'All',            value: '' },
   { label: 'Errand Pay',     value: 'errand_payment' },
-  { label: 'Float Deposit',  value: 'float_deposit' },
   { label: 'Withdrawal',     value: 'withdrawal' },
   { label: 'Dispute Refund', value: 'dispute_refund' },
+  { label: 'Wallet Credit',  value: 'wallet_credit' },
 ] as const
 
 const STATUS_FILTERS = [

@@ -3,10 +3,34 @@
 export type UserRole = 'customer' | 'runner' | 'admin'
 
 export interface UserWallet {
-  floatBalance: number
-  heldFloat: number
   earnings: number
   trustBalance: number
+}
+
+export interface WorkingCapital {
+  limit: number
+  used: number
+}
+
+export interface CustomerWallet {
+  balance: number
+}
+
+// ── App Settings ──────────────────────────────────────────────────────────────
+
+export interface WorkingCapitalSettings {
+  defaultLimit: number
+  maxLimit: number
+  increaseStep: number
+  decreaseStep: number
+  increaseCheckInterval: number
+  minRatingForIncrease: number
+  maxDisputeRateForIncrease: number
+}
+
+export interface AppSettings {
+  workingCapital: WorkingCapitalSettings
+  updatedAt: string | null
 }
 
 export interface AdminUser {
@@ -22,6 +46,8 @@ export interface AdminUser {
   cancelCount: number
   verificationStatus?: 'none' | 'pending' | 'approved' | 'rejected'
   wallet: UserWallet
+  workingCapital?: WorkingCapital
+  customerWallet?: CustomerWallet
   availability?: {
     status: 'offline' | 'available' | 'busy' | 'receiving_request'
     latitude: number | null
@@ -82,7 +108,7 @@ export interface PaginatedResponse<T> {
 
 // ── Payment ───────────────────────────────────────────────────────────────────
 
-export type PaymentType = 'errand_payment' | 'float_deposit' | 'withdrawal' | 'dispute_refund'
+export type PaymentType = 'errand_payment' | 'withdrawal' | 'dispute_refund' | 'wallet_credit'
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'cancelled'
 
 export interface Payment {
@@ -135,11 +161,12 @@ export interface Errand {
   runnerReceives: number
   platformEarns: number
   trustHeld: number
-  floatUsed: boolean
-  ownMoneyUsed: boolean
-  floatReleased: boolean
+  capacityUsed: boolean
+  capacityReleased: boolean
+  excusedCancellation: boolean
   status: ErrandStatus
   proofOfCompletion: string | null
+  proofPhotoUrl?: string | null
   assignedAt: string | null
   startedAt: string | null
   completedAt: string | null
@@ -148,6 +175,7 @@ export interface Errand {
   disputedAt: string | null
   disputeReason: string | null
   cancelledBy: 'customer' | 'runner' | 'admin' | null
+  cancelledByRunnerId: string | null
   cancelReason: string | null
   isPaid: boolean
   paidAt: string | null

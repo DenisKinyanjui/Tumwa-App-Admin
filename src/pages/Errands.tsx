@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   fetchErrands,
-  fetchErrand,
   cancelErrandAdmin,
   assignRunnerAdmin,
   fetchUsers,
 } from '../services/api'
 import type { Errand, ErrandStatus, AdminUser } from '../types'
-import type { ErrandDetailResponse } from '../services/api'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -17,12 +15,6 @@ const fmt = (n: number) =>
 
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })
-
-const fmtDateTime = (d: string) =>
-  new Date(d).toLocaleString('en-KE', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -81,7 +73,7 @@ function CancelModal({
         <h3 className="text-base font-bold text-gray-900">Cancel Errand?</h3>
         <p className="mt-1 text-sm text-gray-500">
           Are you sure you want to cancel <span className="font-semibold text-gray-700">"{errand.title}"</span>?
-          {errand.runner && ' Any float held by the runner will be released.'}
+          {errand.runner && " The runner's working capital will be released."}
         </p>
         {error && <p className="mt-2 text-xs font-semibold text-red-500">{error}</p>}
         <div className="mt-5 flex gap-3">
@@ -176,114 +168,10 @@ function AssignRunnerModal({
   )
 }
 
-// ── Detail modal ───────────────────────────────────────────────────────────────
-
-function DetailRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <span className="text-xs text-gray-400">{label}</span>
-      <span className="text-sm font-medium text-gray-800 text-right">{value}</span>
-    </div>
-  )
-}
-
-function ErrandDetailModal({ errandId, onClose }: { errandId: string; onClose: () => void }) {
-  const [data, setData] = useState<ErrandDetailResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    setLoading(true)
-    setError('')
-    fetchErrand(errandId)
-      .then(setData)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [errandId])
-
-  const errand = data?.errand
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
-        <div className="mb-4 flex items-start justify-between">
-          <h3 className="text-base font-bold text-gray-900">Errand Details</h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {loading && <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-5 animate-pulse rounded bg-gray-100" />)}
-        </div>}
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        {!loading && errand && (
-          <div className="space-y-5">
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-gray-900">{errand.title}</h4>
-                <StatusBadge status={errand.status} />
-              </div>
-              <p className="mt-1 text-sm text-gray-500">{errand.description}</p>
-              <p className="mt-1 text-xs text-gray-400">{errand.location.address}</p>
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">People</p>
-              <DetailRow label="Customer" value={errand.customer ? `${errand.customer.name} (${errand.customer.phone})` : '—'} />
-              <DetailRow label="Runner" value={errand.runner ? `${errand.runner.name} (${errand.runner.phone})` : '— Unassigned'} />
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Money</p>
-              <DetailRow label="Errand amount" value={fmt(errand.amount)} />
-              <DetailRow label="Customer pays" value={fmt(errand.totalCustomerPays)} />
-              <DetailRow label="Runner receives" value={fmt(errand.runnerReceives)} />
-              <DetailRow label="Platform earns" value={fmt(errand.platformEarns)} />
-              <DetailRow label="Paid" value={errand.isPaid ? `Yes — ${errand.paidAt ? fmtDateTime(errand.paidAt) : ''}` : 'No'} />
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Timeline</p>
-              <DetailRow label="Created" value={fmtDateTime(errand.createdAt)} />
-              {errand.assignedAt && <DetailRow label="Assigned" value={fmtDateTime(errand.assignedAt)} />}
-              {errand.startedAt && <DetailRow label="Started" value={fmtDateTime(errand.startedAt)} />}
-              {errand.completedAt && <DetailRow label="Completed" value={fmtDateTime(errand.completedAt)} />}
-              {errand.confirmedAt && <DetailRow label="Confirmed" value={fmtDateTime(errand.confirmedAt)} />}
-              {errand.cancelledAt && <DetailRow label="Cancelled" value={fmtDateTime(errand.cancelledAt)} />}
-              {errand.disputedAt && <DetailRow label="Disputed" value={fmtDateTime(errand.disputedAt)} />}
-            </div>
-
-            {(errand.disputeReason || errand.cancelReason || data?.dispute) && (
-              <div className="rounded-xl bg-red-50 p-3">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-400">Issue</p>
-                {errand.disputeReason && <p className="text-sm text-red-700">Dispute: {errand.disputeReason}</p>}
-                {errand.cancelReason && <p className="text-sm text-red-700">Cancel reason: {errand.cancelReason}</p>}
-                {data?.dispute && <p className="mt-1 text-xs text-red-500">Dispute status: {data.dispute.status}</p>}
-              </div>
-            )}
-
-            {data?.payment?.mpesa?.receiptNumber && (
-              <div className="rounded-xl bg-gray-50 p-3">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Payment</p>
-                <DetailRow label="M-Pesa Ref" value={data.payment.mpesa.receiptNumber} />
-                <DetailRow label="Status" value={data.payment.status} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Errands page ───────────────────────────────────────────────────────────────
 
 export default function Errands() {
+  const navigate = useNavigate()
   const [errands, setErrands]       = useState<Errand[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
@@ -297,7 +185,6 @@ export default function Errands() {
   const [page, setPage]                 = useState(1)
 
   // Actions
-  const [detailId, setDetailId]           = useState<string | null>(null)
   const [cancelTarget, setCancelTarget]   = useState<Errand | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError]     = useState('')
@@ -559,7 +446,7 @@ export default function Errands() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setDetailId(errand._id)}
+                            onClick={() => navigate(`/errands/${errand._id}`)}
                             title="View details"
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
                           >
@@ -617,11 +504,6 @@ export default function Errands() {
           </div>
         )}
       </div>
-
-      {/* Detail modal */}
-      {detailId && (
-        <ErrandDetailModal errandId={detailId} onClose={() => setDetailId(null)} />
-      )}
 
       {/* Cancel confirm modal */}
       {cancelTarget && (
