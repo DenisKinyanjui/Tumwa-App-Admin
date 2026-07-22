@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useOutletContext, Link } from 'react-router-dom'
 import { Pencil, Check, X } from 'lucide-react'
 import { fetchUsers, setRunnerWorkingCapital } from '../services/api'
 import type { AdminUser } from '../types'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 function fmtCurrency(n: number) {
   return `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -14,6 +15,7 @@ const LIMIT = 20
 // balance. See services/workingCapitalService.js in the backend.
 export default function WorkingCapital() {
   const navigate = useNavigate()
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const [runners, setRunners] = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading] = useState(true)
@@ -49,6 +51,17 @@ export default function WorkingCapital() {
   }, [])
 
   useEffect(() => { load(page, search) }, [page, load]) // search handled via debounce below
+
+  useEffect(() => {
+    // Kept short since this renders in the layout's single-line header
+    // breadcrumb slot — the full explanation still lives in the page body.
+    setSubtitle(
+      <>
+        Risk/trust limits, not withdrawable — progression rules on{' '}
+        <Link to="/settings" className="font-semibold text-primary-600 hover:underline">Settings</Link>
+      </>,
+    )
+  }, [setSubtitle])
 
   const handleSearchChange = (value: string) => {
     setSearch(value)
@@ -98,27 +111,18 @@ export default function WorkingCapital() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Working Capital</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Runner risk/trust limits used by the matching engine — not deposited money, not withdrawable.
-          Default/progression rules are configured on the{' '}
-          <Link to="/settings" className="font-semibold text-primary-600 hover:underline">Settings</Link> page.
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total Limit (this page)</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{fmtCurrency(totalLimit)}</p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total Active (this page)</p>
           <p className="mt-1 text-2xl font-bold text-gray-900">{fmtCurrency(totalUsed)}</p>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-100 p-4">
           <input
             type="text"

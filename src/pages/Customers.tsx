@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { fetchUsers, updateUserStatus, deleteUser } from '../services/api'
 import type { AdminUser } from '../types'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ function ConfirmModal({ user, onConfirm, onCancel, loading }: ConfirmModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${user.isActive ? 'bg-red-50' : 'bg-green-50'}`}>
           {user.isActive ? (
             <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -82,7 +83,7 @@ interface DeleteModalProps {
 function DeleteConfirmModal({ user, onConfirm, onCancel, loading }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
           <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -127,8 +128,9 @@ const STATUS_OPTIONS = [
 
 const LIMIT = 20
 
-export default function Users() {
+export default function Customers() {
   const navigate = useNavigate()
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const [users, setUsers]       = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]   = useState(true)
@@ -176,6 +178,10 @@ export default function Users() {
   useEffect(() => {
     load(page, search, status)
   }, [page, status, load]) // search handled via debounce below
+
+  useEffect(() => {
+    setSubtitle(pagination.total > 0 ? `${pagination.total} total customers` : 'Manage platform customers')
+  }, [pagination.total, setSubtitle])
 
   const handleSearchChange = (val: string) => {
     setSearch(val)
@@ -227,14 +233,6 @@ export default function Users() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Customers</h2>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {pagination.total > 0 ? `${pagination.total} total customers` : 'Manage platform customers'}
-        </p>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
@@ -269,7 +267,7 @@ export default function Users() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -285,7 +283,7 @@ export default function Users() {
 
       {/* Delete error toast */}
       {deleteError && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -296,7 +294,7 @@ export default function Users() {
 
       {/* Toggle error toast */}
       {toggleError && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -306,7 +304,7 @@ export default function Users() {
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead>
@@ -378,7 +376,7 @@ export default function Users() {
                           <button
                             onClick={() => navigate(`/users/${user._id}`)}
                             title="View details"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -398,7 +396,7 @@ export default function Users() {
                           <button
                             onClick={() => setDeleteTarget(user)}
                             title="Delete user permanently"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

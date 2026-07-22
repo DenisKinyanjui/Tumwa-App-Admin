@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { X, ChevronRight, AlertTriangle } from 'lucide-react'
 import {
   fetchDisputes,
@@ -8,6 +9,7 @@ import {
 } from '../services/api'
 import type { AdminDispute, DisputeStatus, ResolutionOutcome } from '../types'
 import { useBadges } from '../context/BadgeContext'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -432,6 +434,7 @@ function DetailPanel({
 // ── Disputes page ─────────────────────────────────────────────────────────────
 
 export default function Disputes() {
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const { decrementOpenDisputes } = useBadges()
   const [disputes, setDisputes]   = useState<AdminDispute[]>([])
   const [loading, setLoading]     = useState(true)
@@ -450,6 +453,10 @@ export default function Disputes() {
 
   useEffect(() => { load(statusFilter) }, [statusFilter, load])
 
+  useEffect(() => {
+    setSubtitle(disputes.length > 0 ? `${disputes.length} dispute${disputes.length !== 1 ? 's' : ''} shown` : 'All dispute reports from users')
+  }, [disputes.length, setSubtitle])
+
   const handleUpdated = (updated: AdminDispute) => {
     setDisputes((prev) => prev.map((d) => d._id === updated._id ? updated : d))
     setSelected(updated)
@@ -462,25 +469,16 @@ export default function Disputes() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Disputes</h2>
-          <p className="mt-0.5 text-sm text-gray-500">
-            {disputes.length > 0
-              ? `${disputes.length} dispute${disputes.length !== 1 ? 's' : ''} shown`
-              : 'All dispute reports from users'}
-          </p>
-        </div>
-        {(pending + underReview) > 0 && (
-          <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 ring-1 ring-amber-200">
+      {(pending + underReview) > 0 && (
+        <div className="flex items-center justify-end">
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             <span className="text-sm font-semibold text-amber-700">
               {pending + underReview} requiring action
             </span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Status filter tabs */}
       <div className="flex flex-wrap rounded-xl bg-gray-100 p-1 gap-1">

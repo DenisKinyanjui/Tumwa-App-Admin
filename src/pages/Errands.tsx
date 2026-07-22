@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 import {
   fetchErrands,
   cancelErrandAdmin,
@@ -172,6 +173,7 @@ function AssignRunnerModal({
 
 export default function Errands() {
   const navigate = useNavigate()
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const [errands, setErrands]       = useState<Errand[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
@@ -221,6 +223,10 @@ export default function Errands() {
     load(page, statusFilter, paidFilter, dateFrom, dateTo)
   }, [page, statusFilter, paidFilter, dateFrom, dateTo, load])
 
+  useEffect(() => {
+    setSubtitle(pagination.total > 0 ? `${pagination.total} total errands` : 'All errands on the platform')
+  }, [pagination.total, setSubtitle])
+
   const handleStatusChange = (v: string) => { setStatusFilter(v); setPage(1) }
   const handlePaidChange = (v: boolean | '') => { setPaidFilter(v); setPage(1) }
   const handleDateChange = (from: string, to: string) => {
@@ -264,14 +270,6 @@ export default function Errands() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Errands</h2>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {pagination.total > 0 ? `${pagination.total} total errands` : 'All errands on the platform'}
-        </p>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Status filter */}

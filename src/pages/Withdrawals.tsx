@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { fetchPayments } from '../services/api'
-import type { Payment, PaymentType, PaymentStatus } from '../types'
+import type { Payment, PaymentStatus } from '../types'
 import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -17,24 +17,6 @@ const fmtDateTime = (d: string) =>
     day: 'numeric', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
-
-// ── Type badge ────────────────────────────────────────────────────────────────
-
-const TYPE_META: Record<PaymentType, { label: string; className: string }> = {
-  errand_payment: { label: 'Errand Pay',     className: 'bg-blue-50 text-blue-700' },
-  withdrawal:     { label: 'Withdrawal',     className: 'bg-amber-50 text-amber-700' },
-  dispute_refund: { label: 'Dispute Refund', className: 'bg-teal-50 text-teal-700' },
-  wallet_credit:  { label: 'Wallet Credit',  className: 'bg-purple-50 text-purple-700' },
-}
-
-function TypeBadge({ type }: { type: PaymentType }) {
-  const { label, className } = TYPE_META[type] ?? { label: type, className: 'bg-gray-50 text-gray-600' }
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${className}`}>
-      {label}
-    </span>
-  )
-}
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -57,14 +39,6 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
 
 // ── Filter options ────────────────────────────────────────────────────────────
 
-const TYPE_FILTERS = [
-  { label: 'All',            value: '' },
-  { label: 'Errand Pay',     value: 'errand_payment' },
-  { label: 'Withdrawal',     value: 'withdrawal' },
-  { label: 'Dispute Refund', value: 'dispute_refund' },
-  { label: 'Wallet Credit',  value: 'wallet_credit' },
-] as const
-
 const STATUS_FILTERS = [
   { label: 'All',       value: '' },
   { label: 'Completed', value: 'completed' },
@@ -75,37 +49,38 @@ const STATUS_FILTERS = [
 
 const LIMIT = 20
 
-// ── Payments page ─────────────────────────────────────────────────────────────
+// ── Withdrawals page ──────────────────────────────────────────────────────────
+// Runner earnings withdrawals (B2C M-Pesa payouts) — these are Payment
+// records with type "withdrawal", filtered server-side via GET /admin/payments.
 
-export default function Payments() {
+export default function Withdrawals() {
   const { setSubtitle } = useOutletContext<LayoutOutletContext>()
-  const [payments, setPayments]     = useState<Payment[]>([])
-  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState('')
+  const [withdrawals, setWithdrawals] = useState<Payment[]>([])
+  const [pagination, setPagination]   = useState({ total: 0, page: 1, totalPages: 1 })
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState('')
 
   // Filters
-  const [typeFilter, setTypeFilter]     = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [dateFrom, setDateFrom]         = useState('')
   const [dateTo, setDateTo]             = useState('')
   const [page, setPage]                 = useState(1)
 
   const load = useCallback((
-    p: number, type: string, status: string, from: string, to: string,
+    p: number, status: string, from: string, to: string,
   ) => {
     setLoading(true)
     setError('')
     fetchPayments({
       page: p,
       limit: LIMIT,
-      type: type || undefined,
+      type: 'withdrawal',
       status: status || undefined,
       dateFrom: from || undefined,
       dateTo: to || undefined,
     })
       .then((res) => {
-        setPayments(res.data.payments)
+        setWithdrawals(res.data.payments)
         setPagination({
           total: res.pagination.total,
           page: res.pagination.page,
@@ -117,43 +92,29 @@ export default function Payments() {
   }, [])
 
   useEffect(() => {
-    load(page, typeFilter, statusFilter, dateFrom, dateTo)
-  }, [page, typeFilter, statusFilter, dateFrom, dateTo, load])
+    load(page, statusFilter, dateFrom, dateTo)
+  }, [page, statusFilter, dateFrom, dateTo, load])
 
   useEffect(() => {
-    setSubtitle(pagination.total > 0 ? `${pagination.total} total transactions` : 'All M-Pesa transactions on the platform')
+    setSubtitle(pagination.total > 0 ? `${pagination.total} total withdrawal requests` : 'Runner earnings withdrawals (M-Pesa payouts)')
   }, [pagination.total, setSubtitle])
 
-  const handleTypeChange = (v: string) => { setTypeFilter(v); setPage(1) }
   const handleStatusChange = (v: string) => { setStatusFilter(v); setPage(1) }
   const handleDateChange = (from: string, to: string) => {
     setDateFrom(from); setDateTo(to); setPage(1)
   }
 
   // Totals from current page (summary bar)
-  const completedTotal = payments
-    .filter((p) => p.status === 'completed')
-    .reduce((sum, p) => sum + p.amount, 0)
+  const completedTotal = withdrawals
+    .filter((w) => w.status === 'completed')
+    .reduce((sum, w) => sum + w.amount, 0)
+  const pendingCount = withdrawals.filter((w) => w.status === 'pending').length
+  const failedCount  = withdrawals.filter((w) => w.status === 'failed').length
 
   return (
     <div className="space-y-5">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Type filter */}
-        <div className="flex flex-wrap rounded-xl bg-gray-100 p-1 gap-1">
-          {TYPE_FILTERS.map(({ label, value }) => (
-            <button
-              key={label}
-              onClick={() => handleTypeChange(value)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap ${
-                typeFilter === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
         {/* Status filter */}
         <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
           {STATUS_FILTERS.map(({ label, value }) => (
@@ -196,28 +157,36 @@ export default function Payments() {
       </div>
 
       {/* Summary strip */}
-      {!loading && payments.length > 0 && (
-        <div className="flex flex-wrap gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+      {!loading && withdrawals.length > 0 && (
+        <div className="flex flex-wrap gap-4 rounded-2xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-100">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Showing</p>
-            <p className="mt-0.5 text-sm font-bold text-gray-900">{payments.length} of {pagination.total}</p>
+            <p className="mt-0.5 text-sm font-bold text-gray-900">{withdrawals.length} of {pagination.total}</p>
           </div>
           <div className="border-l border-gray-100 pl-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Completed (page)</p>
             <p className="mt-0.5 text-sm font-bold text-green-700">{fmt(completedTotal)}</p>
+          </div>
+          <div className="border-l border-gray-100 pl-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Pending (page)</p>
+            <p className="mt-0.5 text-sm font-bold text-amber-700">{pendingCount}</p>
+          </div>
+          <div className="border-l border-gray-100 pl-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Failed (page)</p>
+            <p className="mt-0.5 text-sm font-bold text-red-600">{failedCount}</p>
           </div>
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           {error}
           <button
-            onClick={() => load(page, typeFilter, statusFilter, dateFrom, dateTo)}
+            onClick={() => load(page, statusFilter, dateFrom, dateTo)}
             className="ml-auto text-xs font-semibold underline"
           >
             Retry
@@ -226,128 +195,104 @@ export default function Payments() {
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Type</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Runner</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Amount</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Phone</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">User</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Errand</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">M-Pesa Ref</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Requested</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading
                 ? Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 8 }).map((__, j) => (
+                      {Array.from({ length: 6 }).map((__, j) => (
                         <td key={j} className="px-5 py-4">
                           <div className="h-4 animate-pulse rounded bg-gray-100" />
                         </td>
                       ))}
                     </tr>
                   ))
-                : payments.length === 0
+                : withdrawals.length === 0
                 ? (
                     <tr>
-                      <td colSpan={8} className="px-5 py-16 text-center">
+                      <td colSpan={6} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-2 text-gray-400">
                           <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                           </svg>
-                          <p className="text-sm font-medium">No payments found</p>
+                          <p className="text-sm font-medium">No withdrawals found</p>
                           <p className="text-xs">Try adjusting your filters</p>
                         </div>
                       </td>
                     </tr>
                   )
-                : payments.map((payment) => {
-                    const user = payment.customer ?? payment.runner
-                    return (
-                      <tr key={payment._id} className="transition-colors hover:bg-gray-50/50">
-                        {/* Type */}
-                        <td className="px-5 py-4">
-                          <TypeBadge type={payment.type} />
-                        </td>
-
-                        {/* Amount */}
-                        <td className="px-5 py-4">
-                          <span className="text-sm font-semibold text-gray-900">{fmt(payment.amount)}</span>
-                        </td>
-
-                        {/* Phone */}
-                        <td className="px-5 py-4">
-                          <span className="text-sm text-gray-600">{payment.phoneNumber}</span>
-                        </td>
-
-                        {/* User */}
-                        <td className="px-5 py-4">
-                          {user ? (
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-600">
-                                {user.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-gray-900 max-w-[120px]">{user.name}</p>
-                                <p className="text-xs text-gray-400">{payment.customer ? 'customer' : 'runner'}</p>
-                              </div>
+                : withdrawals.map((withdrawal) => (
+                    <tr key={withdrawal._id} className="transition-colors hover:bg-gray-50/50">
+                      {/* Runner */}
+                      <td className="px-5 py-4">
+                        {withdrawal.runner ? (
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-600">
+                              {withdrawal.runner.name.charAt(0).toUpperCase()}
                             </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
-                        </td>
+                            <p className="truncate text-sm font-semibold text-gray-900 max-w-[140px]">{withdrawal.runner.name}</p>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
 
-                        {/* Errand */}
-                        <td className="px-5 py-4">
-                          {payment.errand ? (
-                            <p className="max-w-[140px] truncate text-sm text-gray-700" title={payment.errand.title}>
-                              {payment.errand.title}
+                      {/* Amount */}
+                      <td className="px-5 py-4">
+                        <span className="text-sm font-semibold text-gray-900">{fmt(withdrawal.amount)}</span>
+                      </td>
+
+                      {/* Phone */}
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-gray-600">{withdrawal.phoneNumber}</span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-5 py-4">
+                        <div className="space-y-1">
+                          <StatusBadge status={withdrawal.status} />
+                          {withdrawal.failureReason && (
+                            <p className="text-xs text-red-500 max-w-[160px] truncate" title={withdrawal.failureReason}>
+                              {withdrawal.failureReason}
                             </p>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
                           )}
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* Status */}
-                        <td className="px-5 py-4">
-                          <div className="space-y-1">
-                            <StatusBadge status={payment.status} />
-                            {payment.failureReason && (
-                              <p className="text-xs text-red-500 max-w-[120px] truncate" title={payment.failureReason}>
-                                {payment.failureReason}
-                              </p>
-                            )}
-                          </div>
-                        </td>
+                      {/* M-Pesa Ref */}
+                      <td className="px-5 py-4">
+                        {withdrawal.mpesa?.receiptNumber ? (
+                          <span className="font-mono text-xs text-gray-700">{withdrawal.mpesa.receiptNumber}</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
 
-                        {/* M-Pesa Ref */}
-                        <td className="px-5 py-4">
-                          {payment.mpesa?.receiptNumber ? (
-                            <span className="font-mono text-xs text-gray-700">{payment.mpesa.receiptNumber}</span>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
+                      {/* Date */}
+                      <td className="px-5 py-4">
+                        <div>
+                          <p className="text-sm text-gray-700 whitespace-nowrap">{fmtDate(withdrawal.createdAt)}</p>
+                          {withdrawal.completedAt && (
+                            <p className="text-xs text-gray-400 whitespace-nowrap">
+                              Done {fmtDateTime(withdrawal.completedAt)}
+                            </p>
                           )}
-                        </td>
-
-                        {/* Date */}
-                        <td className="px-5 py-4">
-                          <div>
-                            <p className="text-sm text-gray-700 whitespace-nowrap">{fmtDate(payment.createdAt)}</p>
-                            {payment.completedAt && (
-                              <p className="text-xs text-gray-400 whitespace-nowrap">
-                                Done {fmtDateTime(payment.completedAt)}
-                              </p>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
             </tbody>
           </table>
         </div>

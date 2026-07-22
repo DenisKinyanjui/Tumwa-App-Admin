@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     authMe()
       .then((me) => {
-        if (me.role !== 'admin') {
+        if (!['admin', 'superadmin'].includes(me.role)) {
           removeToken()
           setUser(null)
         } else {
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (phone: string, password: string) => {
     const res = await authLogin(phone, password)
-    if (res.data.user.role !== 'admin') {
+    if (!['admin', 'superadmin'].includes(res.data.user.role)) {
       throw new Error('Access denied. Admin accounts only.')
     }
     saveToken(res.accessToken)

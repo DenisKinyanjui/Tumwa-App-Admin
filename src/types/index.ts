@@ -1,6 +1,6 @@
 // ── User ──────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'customer' | 'runner' | 'admin'
+export type UserRole = 'customer' | 'runner' | 'admin' | 'superadmin'
 
 export interface UserWallet {
   earnings: number
@@ -60,20 +60,44 @@ export interface AdminUser {
 
 // ── Runner Verification ───────────────────────────────────────────────────────
 
-export type VerificationStatus = 'pending' | 'approved' | 'rejected'
+export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'resubmission_requested'
+
+export type VerificationHistoryAction =
+  | 'submitted' | 'resubmitted' | 'approved' | 'rejected' | 'resubmission_requested' | 'reopened'
+
+export interface VerificationHistoryEntry {
+  action: VerificationHistoryAction
+  adminId: string | null
+  adminName: string | null
+  reason: string | null
+  at: string
+}
 
 export interface RunnerVerification {
   _id: string
-  nationalId: string
-  idFrontUrl: string
-  idBackUrl: string
-  selfieUrl: string
-  meansOfTransport: 'motorbike' | 'bicycle' | 'car' | 'on_foot' | 'public_transport'
+  // Present once the runner submits documents; null/empty when an admin
+  // approves a runner directly without a submission.
+  nationalId: string | null
+  idFrontUrl: string | null
+  idBackUrl: string | null
+  selfieUrl: string | null
+  // The runner's profile picture (User.photoKey) — separate from the KYC
+  // documents above, included for side-by-side comparison on the review screen.
+  profilePhotoUrl?: string | null
+  meansOfTransport: 'motorbike' | 'bicycle' | 'car' | 'on_foot' | 'public_transport' | null
   areasOfOperation: string[]
   status: VerificationStatus
   adminNotes: string | null
   submittedAt: string
   reviewedAt: string | null
+  reviewedBy?: { id: string | null; name: string | null }
+  history?: VerificationHistoryEntry[]
+}
+
+// A row in the Identity Verification work queue — the same shape as
+// RunnerVerification plus the runner's basic identity (GET /admin/verifications).
+export interface VerificationQueueItem extends RunnerVerification {
+  user: { _id: string; name: string; phone: string } | null
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -270,6 +294,26 @@ export interface PaymentAnalytics {
   }
 }
 
+// ── Service areas ─────────────────────────────────────────────────────────────
+
+export type ZoneStatus = 'active' | 'inactive' | 'retired'
+
+export interface ServiceArea {
+  _id: string
+  name: string
+  region: string
+  status: ZoneStatus
+  sortOrder: number
+  // True until an admin edits this zone — set when it was auto-created from
+  // a customer's geocoded errand location rather than typed in by an admin.
+  autoDetected: boolean
+  // Rolling 7-day errand count bucketed into this zone — only present on the
+  // admin list endpoint (GET /admin/locations), not on individual create/update responses.
+  errandCount7d?: number
+  createdAt: string
+  updatedAt: string
+}
+
 // ── System status ────────────────────────────────────────────────────────────
 
 export interface SystemStatusService {
@@ -307,4 +351,226 @@ export interface AdminDispute {
   resolution: DisputeResolution
   createdAt: string
   updatedAt: string
+}
+
+// ── Notifications (admin-composed push campaigns) ───────────────────────────
+// Backed by GET/POST/PATCH/DELETE /api/admin/notification-campaigns.
+
+export type NotificationAudience = 'all' | 'customers' | 'runners' | 'specific'
+export type NotificationCampaignType = 'system' | 'promotion' | 'announcement' | 'reminder'
+export type NotificationCampaignStatus = 'draft' | 'scheduled' | 'sent' | 'failed'
+
+export interface NotificationCampaignUser {
+  _id: string
+  name: string
+  phone: string
+  role: UserRole
+}
+
+export interface NotificationCampaign {
+  _id: string
+  title: string
+  message: string
+  bannerImageKey: string | null
+  // Short-lived signed R2 URL, re-resolved by the backend on every read.
+  bannerImageUrl: string | null
+  audience: NotificationAudience
+  // Populated user objects on GET :id, plain ObjectId strings on list.
+  specificUserIds: Array<string | NotificationCampaignUser>
+  type: NotificationCampaignType
+  status: NotificationCampaignStatus
+  scheduledAt: string | null
+  sentAt: string | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  recipients: number
+  delivered: number
+  opened: number
+  failed: number
+  failureReason: string | null
+}
+
+export interface NotificationCampaignStats {
+  totalSent: number
+  scheduled: number
+  drafts: number
+  failedDeliveries: number
+}
+
+// ── Announcements (in-app modal/banner/bottom-sheet) ────────────────────────
+// Backed by /api/admin/announcements. Kept entirely separate from the push
+// notification campaigns above — announcements are shown inside the app
+// while it's actively in use, not delivered to the OS notification tray.
+
+export type AnnouncementType = 'modal' | 'top_banner' | 'bottom_sheet'
+
+export type AnnouncementAudience =
+  | 'everyone' | 'customers' | 'runners' | 'verified_runners' | 'unverified_runners'
+  | 'active_runners' | 'suspended_runners' | 'selected_locations' | 'selected_users'
+
+export type AnnouncementTrigger =
+  | 'app_launch' | 'login_success' | 'dashboard_open' | 'first_login'
+  | 'errand_accepted' | 'errand_completed' | 'verification_approved' | 'withdrawal_approved'
+  | 'manual_trigger' | 'custom_event'
+
+export type AnnouncementButtonAction = 'close' | 'external_url' | 'internal_screen' | 'contact_support'
+export type AnnouncementPriority = 'low' | 'normal' | 'high' | 'critical'
+export type AnnouncementDisplayFrequency =
+  | 'once_ever' | 'once_per_version' | 'once_per_session' | 'every_trigger' | 'until_dismissed'
+export type AnnouncementStatus = 'draft' | 'scheduled' | 'active' | 'expired'
+
+export interface AnnouncementLocation {
+  _id: string
+  name: string
+  region: string
+}
+
+export interface Announcement {
+  _id: string
+  title: string
+  subtitle: string | null
+  description: string
+  image: string | null
+  // Short-lived signed R2 URL, re-resolved by the backend on every read.
+  imageUrl: string | null
+  type: AnnouncementType
+  targetAudience: AnnouncementAudience
+  // Populated user/location objects on GET :id, plain ObjectId strings on list.
+  selectedUsers: Array<string | NotificationCampaignUser>
+  selectedLocations: Array<string | AnnouncementLocation>
+  triggers: AnnouncementTrigger[]
+  customEventName: string | null
+  primaryButtonText: string | null
+  secondaryButtonText: string | null
+  primaryAction: AnnouncementButtonAction
+  actionTarget: string | null
+  priority: AnnouncementPriority
+  displayFrequency: AnnouncementDisplayFrequency
+  startDate: string
+  endDate: string
+  // Derived server-side from active + startDate/endDate — never stored.
+  status: AnnouncementStatus
+  active: boolean
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  // Present on list rows only (lightweight per-row counts).
+  views: number
+  clicks: number
+}
+
+export interface AnnouncementAnalytics {
+  views: number
+  dismissals: number
+  clicks: number
+  ctr: number
+  lastSeen: string | null
+  activeUsersReached: number
+  timeSeries: Array<{ date: string; views: number; clicks: number }>
+}
+
+export type SystemNotificationTrigger =
+  | 'runner_verified'
+  | 'withdrawal_approved'
+  | 'payment_successful'
+  | 'errand_assigned'
+  | 'errand_cancelled'
+  | 'dispute_resolved'
+
+export interface SystemNotificationEvent {
+  key: SystemNotificationTrigger
+  label: string
+  description: string
+  audience: 'customers' | 'runners'
+  totalSent: number
+  last24h: number
+  lastTriggeredAt: string | null
+}
+
+// ── Support Center ────────────────────────────────────────────────────────────
+
+export type SupportStatus = 'open' | 'waiting_user' | 'waiting_admin' | 'resolved' | 'closed'
+export type SupportPriority = 'low' | 'medium' | 'high' | 'critical'
+export type SupportCategory =
+  | 'payments'
+  | 'verification'
+  | 'withdrawals'
+  | 'errands'
+  | 'technical_issue'
+  | 'account'
+  | 'refund'
+  | 'general_inquiry'
+  | 'other'
+export type SupportChannel = 'live_chat' | 'whatsapp' | 'email' | 'call'
+
+export interface SupportRequester {
+  id: string
+  name: string
+  phone: string
+  role: 'customer' | 'runner'
+  isActive: boolean
+  verificationStatus: string
+  photoUrl: string | null
+}
+
+export interface SupportConversation {
+  _id: string
+  participants: string[]
+  requesterId: string
+  requesterRole: 'customer' | 'runner'
+  assignedAdmin: string | null
+  status: SupportStatus
+  priority: SupportPriority
+  category: SupportCategory
+  channel: SupportChannel
+  lastMessage: string | null
+  lastActivity: string
+  unreadCounts: { customer: number; admin: number }
+  archived: boolean
+  resolvedAt: string | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+  // Present on admin list/detail responses only.
+  requester?: SupportRequester | null
+}
+
+export interface SupportAttachment {
+  key: string
+  mimeType: string
+  fileName: string
+  size: number
+  url?: string
+}
+
+export interface SupportMessage {
+  _id: string
+  conversationId: string
+  senderId: string
+  senderRole: 'customer' | 'runner' | 'admin' | 'superadmin' | 'system'
+  message: string | null
+  messageType: 'text' | 'image' | 'pdf' | 'system'
+  attachment: SupportAttachment | null
+  readBy: Array<{ user: string; readAt: string }>
+  delivered: boolean
+  createdAt: string
+}
+
+export interface SupportInternalNote {
+  _id: string
+  conversationId: string
+  adminId: string | { _id: string; name: string }
+  note: string
+  createdAt: string
+}
+
+export interface SupportDashboardData {
+  summary: {
+    open: number
+    waitingAdmin: number
+    waitingUser: number
+    resolvedToday: number
+  }
+  channels: Record<SupportChannel, number>
 }

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { Clock, TrendingUp, Star } from 'lucide-react'
 import { fetchUsers, updateUserStatus, deleteUser } from '../services/api'
 import type { AdminUser } from '../types'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 function fmtCurrency(n: number) {
   return `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -82,7 +84,7 @@ function ConfirmModal({ user, onConfirm, onCancel, loading }: ConfirmModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${user.isActive ? 'bg-red-50' : 'bg-green-50'}`}>
           {user.isActive ? (
             <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -133,7 +135,7 @@ interface DeleteModalProps {
 function DeleteConfirmModal({ user, onConfirm, onCancel, loading }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-100">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
           <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -177,15 +179,16 @@ const STATUS_OPTIONS = [
 ] as const
 
 const SORT_OPTIONS = [
-  { label: 'Newest',         sortBy: 'createdAt'        as const, order: 'desc' as const },
-  { label: 'Most Completed', sortBy: 'completedErrands'  as const, order: 'desc' as const },
-  { label: 'Highest Rated',  sortBy: 'rating'            as const, order: 'desc' as const },
+  { label: 'Newest',         sortBy: 'createdAt'        as const, order: 'desc' as const, icon: Clock },
+  { label: 'Most Completed', sortBy: 'completedErrands'  as const, order: 'desc' as const, icon: TrendingUp },
+  { label: 'Highest Rated',  sortBy: 'rating'            as const, order: 'desc' as const, icon: Star },
 ]
 
 const LIMIT = 20
 
 export default function Runners() {
   const navigate = useNavigate()
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const [runners, setRunners] = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
   const [loading, setLoading]   = useState(true)
@@ -237,6 +240,10 @@ export default function Runners() {
   useEffect(() => {
     load(page, search, status, sortIndex)
   }, [page, status, sortIndex, load]) // search handled via debounce below
+
+  useEffect(() => {
+    setSubtitle(pagination.total > 0 ? `${pagination.total} total runners` : 'Manage platform runners')
+  }, [pagination.total, setSubtitle])
 
   const handleSearchChange = (val: string) => {
     setSearch(val)
@@ -293,14 +300,6 @@ export default function Runners() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Runners</h2>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {pagination.total > 0 ? `${pagination.total} total runners` : 'Manage platform runners'}
-        </p>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
@@ -318,39 +317,54 @@ export default function Runners() {
         </div>
 
         {/* Sort */}
-        <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
-          {SORT_OPTIONS.map((opt, idx) => (
-            <button
-              key={opt.label}
-              onClick={() => handleSortChange(idx)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                sortIndex === idx ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-white p-1">
+          {SORT_OPTIONS.map((opt, idx) => {
+            const isActive = sortIndex === idx
+            return (
+              <button
+                key={opt.label}
+                onClick={() => handleSortChange(idx)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                  isActive
+                    ? 'bg-primary-50 text-primary-700 shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                }`}
+              >
+                <opt.icon className={`h-3.5 w-3.5 ${isActive ? 'text-primary-600' : 'text-gray-400'}`} strokeWidth={2} />
+                {opt.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Status filter */}
-        <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
-          {STATUS_OPTIONS.map(({ label, value }) => (
-            <button
-              key={label}
-              onClick={() => handleStatusChange(value)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                status === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-white p-1">
+          {STATUS_OPTIONS.map(({ label, value }) => {
+            const isActive = status === value
+            const activeClass =
+              value === true  ? 'bg-green-50 text-green-700 shadow-sm'
+              : value === false ? 'bg-red-50 text-red-600 shadow-sm'
+              : 'bg-gray-900 text-white shadow-sm'
+            const dotClass = value === true ? 'bg-green-500' : value === false ? 'bg-red-400' : ''
+            return (
+              <button
+                key={label}
+                onClick={() => handleStatusChange(value)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                  isActive ? activeClass : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                }`}
+              >
+                {dotClass && <span className={`h-1.5 w-1.5 rounded-full ${isActive ? dotClass : 'bg-gray-300'}`} />}
+                {label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -366,7 +380,7 @@ export default function Runners() {
 
       {/* Delete error toast */}
       {deleteError && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -377,7 +391,7 @@ export default function Runners() {
 
       {/* Toggle error toast */}
       {toggleError && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -387,21 +401,21 @@ export default function Runners() {
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Runner</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Phone</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Online</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Rating</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Errands</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Available Capacity</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Verification</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Joined</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
+              <tr className="border-b border-gray-200">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Runner</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Phone</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Online</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Rating</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Errands</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Available Capacity</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Verification</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Joined</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -504,7 +518,7 @@ export default function Runners() {
                           <button
                             onClick={() => navigate(`/users/${runner._id}`)}
                             title="View details"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -524,7 +538,7 @@ export default function Runners() {
                           <button
                             onClick={() => setDeleteTarget(runner)}
                             title="Delete runner permanently"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

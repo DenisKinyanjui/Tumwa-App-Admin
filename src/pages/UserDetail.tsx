@@ -1,16 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchUser, updateUser, approveVerification, rejectVerification, fetchVerification } from '../services/api'
+import { ArrowRight } from 'lucide-react'
+import { fetchUser, updateUser, approveVerification, fetchVerification } from '../services/api'
 import type { UserDetailResponse } from '../services/api'
-import type { UserRole, RunnerVerification, VerificationStatus } from '../types'
-import { useBadges } from '../context/BadgeContext'
+import type { UserRole, RunnerVerification } from '../types'
+import VerificationBadge from '../components/VerificationBadge'
+import { useAuth } from '../context/AuthContext'
 
 // ── Shared badge components ───────────────────────────────────────────────────
 
 const ROLE_STYLES: Record<UserRole, string> = {
-  customer: 'bg-blue-50 text-blue-700',
-  runner:   'bg-purple-50 text-purple-700',
-  admin:    'bg-orange-50 text-orange-700',
+  customer:   'bg-blue-50 text-blue-700',
+  runner:     'bg-purple-50 text-purple-700',
+  admin:      'bg-orange-50 text-orange-700',
+  superadmin: 'bg-red-50 text-red-700',
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -45,22 +48,6 @@ const PAYMENT_STATUS_STYLES: Record<string, string> = {
   failed:    'bg-red-50 text-red-600',
 }
 
-// ── Verification status badge ─────────────────────────────────────────────────
-
-const VSTATUS_STYLES: Record<VerificationStatus, string> = {
-  pending:  'bg-yellow-50 text-yellow-700 ring-yellow-200',
-  approved: 'bg-green-50 text-green-700 ring-green-200',
-  rejected: 'bg-red-50 text-red-600 ring-red-200',
-}
-
-function VerificationBadge({ status }: { status: VerificationStatus }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ${VSTATUS_STYLES[status]}`}>
-      {status}
-    </span>
-  )
-}
-
 const TRANSPORT_LABELS: Record<string, string> = {
   motorbike:         'Motorbike',
   bicycle:           'Bicycle',
@@ -71,7 +58,21 @@ const TRANSPORT_LABELS: Record<string, string> = {
 
 // ── Runner verification card ──────────────────────────────────────────────────
 
-function PhotoThumb({ url, label }: { url: string; label: string }) {
+function PhotoThumb({ url, label }: { url: string | null | undefined; label: string }) {
+  if (!url) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+        <div className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-400">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M10.5 6H17a2 2 0 012 2v9m-3-1L10 10.5M3 8v10a2 2 0 002 2h9" />
+          </svg>
+          <span className="text-xs font-medium">Not uploaded</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
@@ -90,51 +91,28 @@ function PhotoThumb({ url, label }: { url: string; label: string }) {
 interface VerificationCardProps {
   verification: RunnerVerification
   userId: string
-  onUpdate: (v: RunnerVerification) => void
   onRefresh: () => void
-  onVerificationActioned: () => void
   refreshing?: boolean
 }
 
-function RunnerVerificationCard({ verification, userId, onUpdate, onRefresh, onVerificationActioned, refreshing }: VerificationCardProps) {
-  const [notes, setNotes] = useState(verification.adminNotes ?? '')
-  const [acting, setActing] = useState<'approve' | 'reject' | null>(null)
-  const [actionError, setActionError] = useState('')
+// Read-only — verification decisions are made exclusively from the Identity
+// Verification review screen now (see VerificationReview.tsx). This card
+// just summarizes the current state and links there.
+function VerificationSummaryCard({ verification, userId, onRefresh, refreshing }: VerificationCardProps) {
+  const navigate = useNavigate()
 
-  // Sync notes textarea when parent refreshes and passes a new verification object
-  useEffect(() => { setNotes(verification.adminNotes ?? '') }, [verification.adminNotes])
+  const hasSubmission = !!(
+    verification.nationalId || verification.idFrontUrl || verification.idBackUrl || verification.selfieUrl
+  )
+  const areas = verification.areasOfOperation ?? []
 
-  const handleApprove = async () => {
-    setActing('approve')
-    setActionError('')
-    try {
-      const updated = await approveVerification(userId, notes || undefined)
-      onUpdate(updated)
-      onVerificationActioned()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.')
-    } finally {
-      setActing(null)
-    }
-  }
-
-  const handleReject = async () => {
-    if (!notes.trim()) { setActionError('Please add a reason before rejecting.'); return }
-    setActing('reject')
-    setActionError('')
-    try {
-      const updated = await rejectVerification(userId, notes)
-      onUpdate(updated)
-      onVerificationActioned()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.')
-    } finally {
-      setActing(null)
-    }
-  }
+  const reasonLabel =
+    verification.status === 'rejected' ? 'Rejection Reason'
+    : verification.status === 'resubmission_requested' ? 'Resubmission Reason'
+    : null
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <h4 className="text-sm font-bold uppercase tracking-wide text-gray-900">Runner Verification</h4>
@@ -153,49 +131,110 @@ function RunnerVerificationCard({ verification, userId, onUpdate, onRefresh, onV
         </div>
       </div>
 
+      {!hasSubmission && (
+        <div className="mb-5 flex items-start gap-2 rounded-xl border border-yellow-100 bg-yellow-50 p-3 text-xs text-yellow-800">
+          <svg className="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          This runner has not submitted any verification documents. {verification.status === 'approved' ? 'They were approved manually by an admin.' : ''}
+        </div>
+      )}
+
       {/* Identity */}
       <div className="mb-5 grid grid-cols-2 gap-4 text-sm">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">National ID</p>
-          <p className="mt-1 font-mono text-gray-900">{verification.nationalId}</p>
+          <p className="mt-1 font-mono text-gray-900">{verification.nationalId ?? 'Not provided'}</p>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Transport</p>
-          <p className="mt-1 text-gray-900">{TRANSPORT_LABELS[verification.meansOfTransport] ?? verification.meansOfTransport}</p>
+          <p className="mt-1 text-gray-900">
+            {verification.meansOfTransport ? (TRANSPORT_LABELS[verification.meansOfTransport] ?? verification.meansOfTransport) : 'Not provided'}
+          </p>
         </div>
         <div className="col-span-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Areas of Operation</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {verification.areasOfOperation.map((area) => (
-              <span key={area} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{area}</span>
-            ))}
+            {areas.length > 0 ? (
+              areas.map((area) => (
+                <span key={area} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{area}</span>
+              ))
+            ) : (
+              <span className="text-sm text-gray-400">Not provided</span>
+            )}
           </div>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Submitted</p>
-          <p className="mt-1 text-gray-600">{fmt(verification.submittedAt)}</p>
+          <p className="mt-1 text-gray-600">{hasSubmission ? fmt(verification.submittedAt) : '—'}</p>
         </div>
         {verification.reviewedAt && (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Reviewed</p>
-            <p className="mt-1 text-gray-600">{fmt(verification.reviewedAt)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              {verification.status === 'approved' ? 'Approved' : 'Reviewed'}
+            </p>
+            <p className="mt-1 text-gray-600">
+              {fmt(verification.reviewedAt)}{verification.reviewedBy?.name ? ` by ${verification.reviewedBy.name}` : ''}
+            </p>
+          </div>
+        )}
+        {reasonLabel && verification.adminNotes && (
+          <div className="col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{reasonLabel}</p>
+            <p className="mt-1 text-gray-700">{verification.adminNotes}</p>
           </div>
         )}
       </div>
 
-      {/* Photos */}
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      {/* Photos (read-only) */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <PhotoThumb url={verification.idFrontUrl} label="ID Front" />
         <PhotoThumb url={verification.idBackUrl}  label="ID Back" />
         <PhotoThumb url={verification.selfieUrl}  label="Selfie" />
+        <PhotoThumb url={verification.profilePhotoUrl} label="Profile Photo" />
       </div>
 
-      {/* Admin notes + actions (only when pending or to update existing notes) */}
+      <button
+        onClick={() => navigate(`/identity-verification/${userId}`)}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700"
+      >
+        Open Verification Review
+        <ArrowRight className="h-4 w-4" strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
+
+// ── No-submission verification card ─────────────────────────────────────────
+// Lets an admin approve a runner directly when they never submitted any
+// verification documents (e.g. onboarded manually, or verified out-of-band).
+
+function NoSubmissionVerificationCard({ userId, onApproved }: { userId: string; onApproved: (v: RunnerVerification) => void }) {
+  const [notes, setNotes] = useState('')
+  const [approving, setApproving] = useState(false)
+  const [actionError, setActionError] = useState('')
+
+  const handleApprove = async () => {
+    setApproving(true)
+    setActionError('')
+    try {
+      const created = await approveVerification(userId, notes || undefined)
+      onApproved(created)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Action failed.')
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-900">Runner Verification</h4>
+      <p className="mb-4 text-sm text-gray-400">No verification submission yet — this runner has not uploaded any documents.</p>
+
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Admin Notes{verification.status === 'rejected' && <span className="ml-1 text-red-400 normal-case font-normal">(required to reject)</span>}
-          </label>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Admin Notes</label>
           <textarea
             rows={2}
             value={notes}
@@ -205,51 +244,16 @@ function RunnerVerificationCard({ verification, userId, onUpdate, onRefresh, onV
           />
         </div>
 
-        {actionError && (
-          <p className="text-xs text-red-600">{actionError}</p>
-        )}
+        {actionError && <p className="text-xs text-red-600">{actionError}</p>}
 
-        {verification.status === 'pending' && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleApprove}
-              disabled={!!acting}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
-            >
-              {acting === 'approve' && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-              Approve
-            </button>
-            <button
-              onClick={handleReject}
-              disabled={!!acting}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-            >
-              {acting === 'reject' && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />}
-              Reject
-            </button>
-          </div>
-        )}
-
-        {verification.status !== 'pending' && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleApprove}
-              disabled={!!acting || verification.status === 'approved'}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-green-200 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {acting === 'approve' && <span className="h-3 w-3 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />}
-              Re-approve
-            </button>
-            <button
-              onClick={handleReject}
-              disabled={!!acting || verification.status === 'rejected'}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {acting === 'reject' && <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />}
-              Re-reject
-            </button>
-          </div>
-        )}
+        <button
+          onClick={handleApprove}
+          disabled={approving}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+        >
+          {approving && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+          Approve Without Documents
+        </button>
       </div>
     </div>
   )
@@ -298,7 +302,7 @@ interface EditState {
 export default function UserDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { decrementPendingVerifications } = useBadges()
+  const { user: currentUser } = useAuth()
 
   const [detail, setDetail] = useState<UserDetailResponse | null>(null)
   const [verification, setVerification] = useState<RunnerVerification | null>(null)
@@ -409,7 +413,7 @@ export default function UserDetail() {
           </svg>
           Back
         </button>
-        <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -441,7 +445,7 @@ export default function UserDetail() {
       </div>
 
       {/* Profile strip */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xl font-bold text-primary-600">
             {user.name.charAt(0).toUpperCase()}
@@ -485,7 +489,7 @@ export default function UserDetail() {
 
         {/* ── Edit form ─────────────────────────────────────────────────────── */}
         <div className="lg:col-span-1">
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <h4 className="mb-5 text-sm font-bold uppercase tracking-wide text-gray-900">Edit Account</h4>
 
             <div className="space-y-4">
@@ -522,6 +526,9 @@ export default function UserDetail() {
                   <option value="customer">Customer</option>
                   <option value="runner">Runner</option>
                   <option value="admin">Admin</option>
+                  {currentUser?.role === 'superadmin' && (
+                    <option value="superadmin">Super Admin</option>
+                  )}
                 </select>
               </Field>
 
@@ -581,7 +588,7 @@ export default function UserDetail() {
                   <button
                     type="button"
                     onClick={() => set('isActive', false)}
-                    disabled={form.role === 'admin'}
+                    disabled={form.role === 'admin' || form.role === 'superadmin'}
                     className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                       !form.isActive
                         ? 'bg-red-600 text-white shadow-sm'
@@ -591,7 +598,7 @@ export default function UserDetail() {
                     Suspend
                   </button>
                 </div>
-                {form.role === 'admin' && (
+                {(form.role === 'admin' || form.role === 'superadmin') && (
                   <p className="mt-1.5 text-xs text-gray-400">Admin accounts cannot be suspended.</p>
                 )}
               </Field>
@@ -600,7 +607,7 @@ export default function UserDetail() {
 
             {/* Feedback */}
             {saveError && (
-              <div className="mt-4 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs text-red-700 ring-1 ring-red-100">
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
                 <svg className="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -608,7 +615,7 @@ export default function UserDetail() {
               </div>
             )}
             {saveSuccess && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-green-50 p-3 text-xs text-green-700 ring-1 ring-green-100">
+              <div className="mt-4 flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 p-3 text-xs text-green-700">
                 <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -634,24 +641,19 @@ export default function UserDetail() {
 
           {/* Runner verification */}
           {user.role === 'runner' && verification && (
-            <RunnerVerificationCard
+            <VerificationSummaryCard
               verification={verification}
               userId={user._id}
-              onUpdate={(v) => setVerification(v)}
               onRefresh={handleRefreshVerification}
-              onVerificationActioned={decrementPendingVerifications}
               refreshing={refreshingVerification}
             />
           )}
           {user.role === 'runner' && !verification && (
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-              <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-900">Runner Verification</h4>
-              <p className="text-sm text-gray-400">No verification submission yet.</p>
-            </div>
+            <NoSubmissionVerificationCard userId={user._id} onApproved={(v) => setVerification(v)} />
           )}
 
           {/* Wallet (read-only) */}
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <h4 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-900">Wallet</h4>
             {user.role === 'runner' ? (
               <>
@@ -670,7 +672,7 @@ export default function UserDetail() {
           </div>
 
           {/* Recent Errands */}
-          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-6 py-4">
               <h4 className="text-sm font-bold uppercase tracking-wide text-gray-900">Recent Errands</h4>
             </div>
@@ -717,7 +719,7 @@ export default function UserDetail() {
           </div>
 
           {/* Recent Payments */}
-          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-6 py-4">
               <h4 className="text-sm font-bold uppercase tracking-wide text-gray-900">Recent Payments</h4>
             </div>

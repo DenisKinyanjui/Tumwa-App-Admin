@@ -6,6 +6,8 @@ import type {
   AdminUser,
   OverviewData,
   RunnerVerification,
+  VerificationQueueItem,
+  VerificationStatus,
   Payment,
   Errand,
   ErrandAnalytics,
@@ -15,6 +17,30 @@ import type {
   ResolutionOutcome,
   AppSettings,
   WorkingCapitalSettings,
+  ServiceArea,
+  ZoneStatus,
+  NotificationCampaign,
+  NotificationCampaignStats,
+  NotificationAudience,
+  NotificationCampaignType,
+  NotificationCampaignStatus,
+  SystemNotificationEvent,
+  Announcement,
+  AnnouncementAnalytics,
+  AnnouncementType,
+  AnnouncementAudience,
+  AnnouncementTrigger,
+  AnnouncementButtonAction,
+  AnnouncementPriority,
+  AnnouncementDisplayFrequency,
+  AnnouncementStatus,
+  SupportConversation,
+  SupportMessage,
+  SupportInternalNote,
+  SupportDashboardData,
+  SupportStatus,
+  SupportPriority,
+  SupportCategory,
 } from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
@@ -137,9 +163,14 @@ export const fetchOverview = async (period = 'month'): Promise<OverviewData> => 
   return data.data
 }
 
-export const fetchErrandAnalytics = async (period = 'month'): Promise<ErrandAnalytics> => {
+export const fetchErrandAnalytics = async (
+  period = 'month',
+  locationField?: 'pickup' | 'delivery',
+): Promise<ErrandAnalytics> => {
+  const params = new URLSearchParams({ period })
+  if (locationField) params.set('locationField', locationField)
   const { data } = await api.get<{ status: string; data: ErrandAnalytics }>(
-    `/admin/analytics/errands?period=${period}`,
+    `/admin/analytics/errands?${params.toString()}`,
   )
   return data.data
 }
@@ -214,6 +245,19 @@ export const fetchUser = async (userId: string): Promise<UserDetailResponse> => 
   return data.data
 }
 
+export const fetchVerificationsQueue = async (
+  query: { status?: VerificationStatus; page?: number; limit?: number } = {},
+): Promise<PaginatedResponse<{ verifications: VerificationQueueItem[] }>> => {
+  const params = new URLSearchParams()
+  if (query.status) params.set('status', query.status)
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  const { data } = await api.get<PaginatedResponse<{ verifications: VerificationQueueItem[] }>>(
+    `/admin/verifications?${params.toString()}`,
+  )
+  return data
+}
+
 export const fetchVerification = async (userId: string): Promise<RunnerVerification> => {
   const { data } = await api.get<{ status: string; data: { verification: RunnerVerification } }>(
     `/admin/verifications/${userId}`,
@@ -233,6 +277,22 @@ export const rejectVerification = async (userId: string, notes: string): Promise
   const { data } = await api.patch<{ status: string; data: { verification: RunnerVerification } }>(
     `/admin/verifications/${userId}/reject`,
     { notes },
+  )
+  return data.data.verification
+}
+
+export const requestResubmissionVerification = async (userId: string, reason: string): Promise<RunnerVerification> => {
+  const { data } = await api.patch<{ status: string; data: { verification: RunnerVerification } }>(
+    `/admin/verifications/${userId}/request-resubmission`,
+    { reason },
+  )
+  return data.data.verification
+}
+
+export const reopenVerification = async (userId: string, reason?: string): Promise<RunnerVerification> => {
+  const { data } = await api.patch<{ status: string; data: { verification: RunnerVerification } }>(
+    `/admin/verifications/${userId}/reopen`,
+    { reason },
   )
   return data.data.verification
 }
@@ -443,6 +503,397 @@ export const setRunnerWorkingCapital = async (userId: string, limit: number): Pr
     { limit },
   )
   return data.data.user
+}
+
+// ── Service areas ────────────────────────────────────────────────────────────
+
+export const fetchServiceAreas = async (): Promise<ServiceArea[]> => {
+  const { data } = await api.get<{ status: string; data: { areas: ServiceArea[] } }>('/admin/locations')
+  return data.data.areas
+}
+
+export const createServiceArea = async (payload: { name: string; region?: string }): Promise<ServiceArea> => {
+  const { data } = await api.post<{ status: string; data: { area: ServiceArea } }>('/admin/locations', payload)
+  return data.data.area
+}
+
+export const updateServiceArea = async (
+  id: string,
+  patch: { name?: string; region?: string; status?: ZoneStatus; sortOrder?: number },
+): Promise<ServiceArea> => {
+  const { data } = await api.patch<{ status: string; data: { area: ServiceArea } }>(`/admin/locations/${id}`, patch)
+  return data.data.area
+}
+
+export const deleteServiceArea = async (id: string): Promise<void> => {
+  await api.delete(`/admin/locations/${id}`)
+}
+
+// ── Notification campaigns ──────────────────────────────────────────────────
+
+export interface NotificationCampaignsQuery {
+  page?: number
+  limit?: number
+  search?: string
+  audience?: NotificationAudience | ''
+  status?: NotificationCampaignStatus | ''
+  dateFrom?: string
+  dateTo?: string
+}
+
+export const fetchNotificationCampaigns = async (
+  query: NotificationCampaignsQuery = {},
+): Promise<PaginatedResponse<{ campaigns: NotificationCampaign[] }>> => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.search) params.set('search', query.search)
+  if (query.audience) params.set('audience', query.audience)
+  if (query.status) params.set('status', query.status)
+  if (query.dateFrom) params.set('dateFrom', query.dateFrom)
+  if (query.dateTo) params.set('dateTo', query.dateTo)
+
+  const { data } = await api.get<PaginatedResponse<{ campaigns: NotificationCampaign[] }>>(
+    `/admin/notification-campaigns?${params.toString()}`,
+  )
+  return data
+}
+
+export const fetchNotificationStats = async (): Promise<NotificationCampaignStats> => {
+  const { data } = await api.get<{ status: string; data: NotificationCampaignStats }>(
+    '/admin/notification-campaigns/stats',
+  )
+  return data.data
+}
+
+export const fetchSystemNotificationEvents = async (): Promise<SystemNotificationEvent[]> => {
+  const { data } = await api.get<{ status: string; data: { events: SystemNotificationEvent[] } }>(
+    '/admin/notification-campaigns/system-events',
+  )
+  return data.data.events
+}
+
+export const fetchNotificationCampaign = async (id: string): Promise<NotificationCampaign> => {
+  const { data } = await api.get<{ status: string; data: { campaign: NotificationCampaign } }>(
+    `/admin/notification-campaigns/${id}`,
+  )
+  return data.data.campaign
+}
+
+export interface NotificationCampaignPayload {
+  title: string
+  message: string
+  bannerImageKey: string | null
+  audience: NotificationAudience
+  specificUserIds: string[]
+  type: NotificationCampaignType
+  action: 'draft' | 'publish'
+  scheduledAt: string | null
+}
+
+export const createNotificationCampaign = async (
+  payload: NotificationCampaignPayload,
+): Promise<NotificationCampaign> => {
+  const { data } = await api.post<{ status: string; data: { campaign: NotificationCampaign } }>(
+    '/admin/notification-campaigns',
+    payload,
+  )
+  return data.data.campaign
+}
+
+export const updateNotificationCampaign = async (
+  id: string,
+  payload: NotificationCampaignPayload,
+): Promise<NotificationCampaign> => {
+  const { data } = await api.patch<{ status: string; data: { campaign: NotificationCampaign } }>(
+    `/admin/notification-campaigns/${id}`,
+    payload,
+  )
+  return data.data.campaign
+}
+
+export const duplicateNotificationCampaign = async (id: string): Promise<NotificationCampaign> => {
+  const { data } = await api.post<{ status: string; data: { campaign: NotificationCampaign } }>(
+    `/admin/notification-campaigns/${id}/duplicate`,
+  )
+  return data.data.campaign
+}
+
+export const deleteNotificationCampaign = async (id: string): Promise<void> => {
+  await api.delete(`/admin/notification-campaigns/${id}`)
+}
+
+export const uploadNotificationBanner = async (
+  file: File,
+): Promise<{ bannerImageKey: string; bannerImageUrl: string }> => {
+  const form = new FormData()
+  form.append('image', file)
+  const { data } = await api.post<{ status: string; data: { bannerImageKey: string; bannerImageUrl: string } }>(
+    '/admin/notification-campaigns/banner-image',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return data.data
+}
+
+export const fetchAudienceCount = async (
+  audience: NotificationAudience,
+  specificUserIds: string[] = [],
+): Promise<number> => {
+  const params = new URLSearchParams({ audience })
+  if (specificUserIds.length) params.set('specificUserIds', specificUserIds.join(','))
+  const { data } = await api.get<{ status: string; data: { count: number } }>(
+    `/admin/notification-campaigns/audience-count?${params.toString()}`,
+  )
+  return data.data.count
+}
+
+// ── Announcements ────────────────────────────────────────────────────────────
+
+export interface AnnouncementsQuery {
+  page?: number
+  limit?: number
+  search?: string
+  audience?: AnnouncementAudience | ''
+  trigger?: AnnouncementTrigger | ''
+  status?: AnnouncementStatus | ''
+  dateFrom?: string
+  dateTo?: string
+}
+
+export const fetchAnnouncements = async (
+  query: AnnouncementsQuery = {},
+): Promise<PaginatedResponse<{ announcements: Announcement[] }>> => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.search) params.set('search', query.search)
+  if (query.audience) params.set('audience', query.audience)
+  if (query.trigger) params.set('trigger', query.trigger)
+  if (query.status) params.set('status', query.status)
+  if (query.dateFrom) params.set('dateFrom', query.dateFrom)
+  if (query.dateTo) params.set('dateTo', query.dateTo)
+
+  const { data } = await api.get<PaginatedResponse<{ announcements: Announcement[] }>>(
+    `/admin/announcements?${params.toString()}`,
+  )
+  return data
+}
+
+export const fetchAnnouncement = async (id: string): Promise<Announcement> => {
+  const { data } = await api.get<{ status: string; data: { announcement: Announcement } }>(
+    `/admin/announcements/${id}`,
+  )
+  return data.data.announcement
+}
+
+export interface AnnouncementPayload {
+  title: string
+  subtitle: string | null
+  description: string
+  image: string | null
+  type: AnnouncementType
+  targetAudience: AnnouncementAudience
+  selectedUsers: string[]
+  selectedLocations: string[]
+  triggers: AnnouncementTrigger[]
+  customEventName: string | null
+  primaryButtonText: string | null
+  secondaryButtonText: string | null
+  primaryAction: AnnouncementButtonAction
+  actionTarget: string | null
+  priority: AnnouncementPriority
+  displayFrequency: AnnouncementDisplayFrequency
+  startDate: string
+  endDate: string
+  activate: boolean
+}
+
+export const createAnnouncement = async (payload: AnnouncementPayload): Promise<Announcement> => {
+  const { data } = await api.post<{ status: string; data: { announcement: Announcement } }>(
+    '/admin/announcements',
+    payload,
+  )
+  return data.data.announcement
+}
+
+export const updateAnnouncement = async (id: string, payload: AnnouncementPayload): Promise<Announcement> => {
+  const { data } = await api.put<{ status: string; data: { announcement: Announcement } }>(
+    `/admin/announcements/${id}`,
+    payload,
+  )
+  return data.data.announcement
+}
+
+export const deleteAnnouncement = async (id: string): Promise<void> => {
+  await api.delete(`/admin/announcements/${id}`)
+}
+
+export const activateAnnouncement = async (id: string): Promise<Announcement> => {
+  const { data } = await api.patch<{ status: string; data: { announcement: Announcement } }>(
+    `/admin/announcements/${id}/activate`,
+  )
+  return data.data.announcement
+}
+
+export const deactivateAnnouncement = async (id: string): Promise<Announcement> => {
+  const { data } = await api.patch<{ status: string; data: { announcement: Announcement } }>(
+    `/admin/announcements/${id}/deactivate`,
+  )
+  return data.data.announcement
+}
+
+export const duplicateAnnouncement = async (id: string): Promise<Announcement> => {
+  const { data } = await api.post<{ status: string; data: { announcement: Announcement } }>(
+    `/admin/announcements/${id}/duplicate`,
+  )
+  return data.data.announcement
+}
+
+export const fetchAnnouncementAnalytics = async (id: string): Promise<AnnouncementAnalytics> => {
+  const { data } = await api.get<{ status: string; data: { analytics: AnnouncementAnalytics } }>(
+    `/admin/announcements/${id}/analytics`,
+  )
+  return data.data.analytics
+}
+
+export const uploadAnnouncementImage = async (
+  file: File,
+): Promise<{ imageKey: string; imageUrl: string }> => {
+  const form = new FormData()
+  form.append('image', file)
+  const { data } = await api.post<{ status: string; data: { imageKey: string; imageUrl: string } }>(
+    '/admin/announcements/image',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return data.data
+}
+
+// ── Support ───────────────────────────────────────────────────────────────────
+
+export interface SupportListFilters {
+  status?: SupportStatus
+  channel?: string
+  category?: SupportCategory
+  assignedAdmin?: string
+  archived?: boolean
+  search?: string
+}
+
+export const fetchSupportConversations = async (
+  filters: SupportListFilters = {},
+): Promise<SupportConversation[]> => {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  })
+  const { data } = await api.get<{ status: string; data: { conversations: SupportConversation[] } }>(
+    `/support/conversations?${params.toString()}`,
+  )
+  return data.data.conversations
+}
+
+export const fetchSupportConversation = async (
+  id: string,
+): Promise<{ conversation: SupportConversation; requester: SupportConversation['requester']; assignedAdmin: { _id: string; name: string } | null }> => {
+  const { data } = await api.get<{
+    status: string
+    data: { conversation: SupportConversation; requester: SupportConversation['requester']; assignedAdmin: { _id: string; name: string } | null }
+  }>(`/support/conversations/${id}`)
+  return data.data
+}
+
+export const fetchSupportMessages = async (
+  id: string,
+  before?: string,
+): Promise<SupportMessage[]> => {
+  const params = before ? `?before=${encodeURIComponent(before)}` : ''
+  const { data } = await api.get<{ status: string; data: { messages: SupportMessage[] } }>(
+    `/support/conversations/${id}/messages${params}`,
+  )
+  return data.data.messages
+}
+
+export const sendSupportMessage = async (id: string, text: string): Promise<SupportMessage> => {
+  const { data } = await api.post<{ status: string; data: { message: SupportMessage } }>(
+    `/support/conversations/${id}/messages`,
+    { text },
+  )
+  return data.data.message
+}
+
+export const uploadSupportAttachment = async (id: string, file: File): Promise<SupportMessage> => {
+  const form = new FormData()
+  form.append('attachment', file)
+  const { data } = await api.post<{ status: string; data: { message: SupportMessage } }>(
+    `/support/conversations/${id}/attachments`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return data.data.message
+}
+
+export const updateSupportConversation = async (
+  id: string,
+  payload: { priority?: SupportPriority; category?: SupportCategory },
+): Promise<SupportConversation> => {
+  const { data } = await api.patch<{ status: string; data: { conversation: SupportConversation } }>(
+    `/support/conversations/${id}`,
+    payload,
+  )
+  return data.data.conversation
+}
+
+export const assignSupportConversation = async (id: string, adminId: string): Promise<SupportConversation> => {
+  const { data } = await api.patch<{ status: string; data: { conversation: SupportConversation } }>(
+    `/support/conversations/${id}/assign`,
+    { adminId },
+  )
+  return data.data.conversation
+}
+
+export const updateSupportStatus = async (id: string, status: SupportStatus): Promise<SupportConversation> => {
+  const { data } = await api.patch<{ status: string; data: { conversation: SupportConversation } }>(
+    `/support/conversations/${id}/status`,
+    { status },
+  )
+  return data.data.conversation
+}
+
+export const archiveSupportConversation = async (id: string): Promise<SupportConversation> => {
+  const { data } = await api.patch<{ status: string; data: { conversation: SupportConversation } }>(
+    `/support/conversations/${id}/archive`,
+  )
+  return data.data.conversation
+}
+
+export const deleteSupportConversation = async (id: string): Promise<void> => {
+  await api.delete(`/support/conversations/${id}`)
+}
+
+export const markSupportRead = async (id: string): Promise<void> => {
+  await api.patch(`/support/conversations/${id}/read`)
+}
+
+export const fetchSupportNotes = async (id: string): Promise<SupportInternalNote[]> => {
+  const { data } = await api.get<{ status: string; data: { notes: SupportInternalNote[] } }>(
+    `/support/conversations/${id}/notes`,
+  )
+  return data.data.notes
+}
+
+export const addSupportNote = async (id: string, note: string): Promise<SupportInternalNote> => {
+  const { data } = await api.post<{ status: string; data: { note: SupportInternalNote } }>(
+    `/support/conversations/${id}/notes`,
+    { note },
+  )
+  return data.data.note
+}
+
+export const fetchSupportDashboard = async (): Promise<SupportDashboardData> => {
+  const { data } = await api.get<{ status: string; data: SupportDashboardData }>('/support/dashboard')
+  return data.data
 }
 
 export default api

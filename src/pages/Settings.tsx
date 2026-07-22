@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { FileText, Save, Wallet } from 'lucide-react'
 import { fetchTerms, updateTerms, fetchSettings, updateSettings } from '../services/api'
 import type { WorkingCapitalSettings } from '../types'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 
 const fmtDateTime = (d: string) =>
   new Date(d).toLocaleString('en-KE', {
@@ -20,6 +22,7 @@ const FIELD_META: { key: keyof WorkingCapitalSettings; label: string; hint: stri
 ]
 
 export default function Settings() {
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
   const [content, setContent] = useState('')
   const [version, setVersion] = useState(0)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
@@ -53,6 +56,10 @@ export default function Settings() {
       .catch((e: Error) => setWcError(e.message))
       .finally(() => setWcLoading(false))
   }, [])
+
+  useEffect(() => {
+    setSubtitle('App-wide content and configuration')
+  }, [setSubtitle])
 
   const handleSave = async () => {
     if (!content.trim()) { setError('Terms & conditions content cannot be empty.'); return }
@@ -96,12 +103,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Settings</h2>
-        <p className="mt-0.5 text-sm text-gray-500">App-wide content and configuration</p>
-      </div>
-
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2.5">
             <Wallet className="h-4 w-4 text-gray-400" />
@@ -161,7 +163,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2.5">
             <FileText className="h-4 w-4 text-gray-400" />

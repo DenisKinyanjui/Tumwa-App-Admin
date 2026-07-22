@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
+import type { LayoutOutletContext } from '../layouts/AdminLayout'
 import {
   Calendar,
   ChevronDown,
@@ -44,8 +45,11 @@ import type {
   SystemStatusService,
 } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { useBadges, BADGE_OVERVIEW_PERIOD } from '../context/BadgeContext'
 
-const PRIMARY = '#FF6F3C'
+const PRIMARY = '#248249'
+// Status semantics (Completed/In Progress/Cancelled) — independent of the
+// brand primary/accent colors above, left as-is on purpose.
 const GREEN = '#22c55e'
 const AMBER = '#fbbf24'
 const RED = '#f87171'
@@ -119,7 +123,7 @@ function Dropdown<T extends string>({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
       >
         {icon}
         {current?.label}
@@ -168,7 +172,7 @@ function StatCard({
   iconColor: string
 }) {
   return (
-    <div className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+    <div className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
         <Icon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.75} />
       </div>
@@ -185,7 +189,7 @@ function StatCard({
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 ${className}`}>
+    <div className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm ${className}`}>
       {children}
     </div>
   )
@@ -220,6 +224,8 @@ function ErrandStatusBadge({ status }: { status: ErrandStatus }) {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { setSubtitle } = useOutletContext<LayoutOutletContext>()
+  const { overview: badgeOverview, overviewFailed: badgeOverviewFailed } = useBadges()
 
   const [period, setPeriod] = useState<Period>('month')
   const [errandGranularity, setErrandGranularity] = useState<Granularity>('month')
@@ -237,15 +243,30 @@ export default function Dashboard() {
   const [systemStatus, setSystemStatus] = useState<SystemStatusService[]>([])
   const [sideLoading, setSideLoading] = useState(true)
 
-  // KPI overview (depends on selected period)
+  // KPI overview (depends on selected period). The sidebar's BadgeContext
+  // fetches this same endpoint at BADGE_OVERVIEW_PERIOD on every page load —
+  // when our period matches, wait for and reuse that instead of firing a
+  // second identical request. Falls back to fetching independently if the
+  // period differs, or if the shared fetch already failed (e.g. it ran
+  // before login and got a 401 that will never resolve on its own).
   useEffect(() => {
+    if (period === BADGE_OVERVIEW_PERIOD && !badgeOverviewFailed) {
+      if (badgeOverview) {
+        setOverview(badgeOverview)
+        setOverviewLoading(false)
+        setOverviewError('')
+      } else {
+        setOverviewLoading(true)
+      }
+      return
+    }
     setOverviewLoading(true)
     setOverviewError('')
     fetchOverview(period)
       .then(setOverview)
       .catch((err: Error) => setOverviewError(err.message))
       .finally(() => setOverviewLoading(false))
-  }, [period])
+  }, [period, badgeOverview, badgeOverviewFailed])
 
   // Errands Overview chart + Errands by Status donut
   useEffect(() => {
@@ -256,6 +277,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchPaymentAnalytics(revenueGranularity).then(setPaymentAnalytics).catch(() => {})
   }, [revenueGranularity])
+
+  useEffect(() => {
+    setSubtitle(`Welcome back, ${user?.name?.split(' ')[0] ?? 'Admin'}`)
+  }, [user?.name, setSubtitle])
 
   // Recent errands, top runners, system status — fetched once
   useEffect(() => {
@@ -300,14 +325,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Welcome back, {user?.name?.split(' ')[0] ?? 'Admin'} 👋
-          </p>
-        </div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <Dropdown
           value={period}
           options={KPI_PERIOD_OPTIONS}
@@ -538,7 +557,7 @@ export default function Dashboard() {
                   const meta = ERRAND_ICON_STYLE[bucketOf(e.status)]
                   return (
                     <div key={e._id} className="flex items-center gap-3">
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.bg}`}>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.bg}`}>
                         <Package className={`h-4 w-4 ${meta.text}`} strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0 flex-1">
