@@ -25,7 +25,7 @@ interface BadgeContextValue {
   openDisputes: number
   pendingVerifications: number
   // Conversations waiting on an admin reply — sourced from GET /support/dashboard
-  // and live-incremented on support:new-conversation/support:new-message.
+  // and live-incremented on support:new-conversation/support:message-alert.
   supportUnread: number
   // Full overview payload from the same fetch that derives the counts above
   // (period = BADGE_OVERVIEW_PERIOD) — reused by Dashboard.tsx to avoid
@@ -100,12 +100,16 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       setPendingVers((c) => c + 1)
     })
 
-    // New support conversation, or a new message on an existing one —
-    // both mean "something is waiting on an admin".
+    // New support conversation, or a new message on an existing one — both
+    // mean "something is waiting on an admin". support:message-alert (not
+    // support:new-message) is the notifyService-driven event that's actually
+    // broadcast to every admin for unassigned conversations, or targeted at
+    // the assigned admin — support:new-message itself only ever reaches the
+    // requester/assigned-admin/room, which this generic socket never joins.
     socket.on('support:new-conversation', () => {
       setSupportUnread((c) => c + 1)
     })
-    socket.on('support:new-message', () => {
+    socket.on('support:message-alert', () => {
       setSupportUnread((c) => c + 1)
     })
 

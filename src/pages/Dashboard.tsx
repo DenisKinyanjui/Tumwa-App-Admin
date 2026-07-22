@@ -3,7 +3,6 @@ import { Link, useOutletContext } from 'react-router-dom'
 import type { LayoutOutletContext } from '../layouts/AdminLayout'
 import {
   Calendar,
-  ChevronDown,
   Users as UsersIcon,
   Footprints,
   ClipboardList,
@@ -46,6 +45,9 @@ import type {
 } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { useBadges, BADGE_OVERVIEW_PERIOD } from '../context/BadgeContext'
+import Card from '../components/Card'
+import StatCard from '../components/StatCard'
+import Dropdown from '../components/Dropdown'
 
 const PRIMARY = '#248249'
 // Status semantics (Completed/In Progress/Cancelled) — independent of the
@@ -102,98 +104,6 @@ const KPI_PERIOD_OPTIONS: Array<{ value: Period; label: string }> = [
   { value: 'quarter', label: 'This Quarter' },
   { value: 'year', label: 'This Year' },
 ]
-
-// ── Dropdown ──────────────────────────────────────────────────────────────────
-
-function Dropdown<T extends string>({
-  value,
-  options,
-  onChange,
-  icon,
-}: {
-  value: T
-  options: Array<{ value: T; label: string }>
-  onChange: (v: T) => void
-  icon?: React.ReactNode
-}) {
-  const [open, setOpen] = useState(false)
-  const current = options.find((o) => o.value === value)
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-      >
-        {icon}
-        {current?.label}
-        <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1.5 w-36 overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-gray-100">
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  onChange(opt.value)
-                  setOpen(false)
-                }}
-                className={`block w-full px-3 py-2 text-left text-xs font-medium transition-colors ${
-                  opt.value === value ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ── Stat card ─────────────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  iconBg,
-  iconColor,
-}: {
-  label: string
-  value: string | number
-  sub?: string
-  icon: typeof UsersIcon
-  iconBg: string
-  iconColor: string
-}) {
-  return (
-    <div className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
-        <Icon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-gray-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-        {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-// ── Card shell ────────────────────────────────────────────────────────────────
-
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm ${className}`}>
-      {children}
-    </div>
-  )
-}
 
 // ── Errand status bucketing ───────────────────────────────────────────────────
 

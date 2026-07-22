@@ -25,6 +25,8 @@ import Announcements from './pages/Announcements'
 import AnnouncementDetail from './pages/AnnouncementDetail'
 import Settings from './pages/Settings'
 import Support from './pages/Support'
+import Analytics from './pages/Analytics'
+import Reports from './pages/Reports'
 
 export default function App() {
   return (
@@ -57,6 +59,8 @@ export default function App() {
                   <Route path="/announcements" element={<Announcements />} />
                   <Route path="/announcements/:id" element={<AnnouncementDetail />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/reports" element={<Reports />} />
                 </Route>
               </Route>
 

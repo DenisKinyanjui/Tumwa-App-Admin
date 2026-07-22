@@ -236,17 +236,28 @@ export interface OverviewData {
   payments: {
     revenue: { count: number; total: number }
     withdrawals: { count: number; total: number }
+    pendingWithdrawals: { count: number; total: number }
     failedCount: number
     inPeriodRevenue: { count: number; total: number }
     paymentSuccessRate: number
     netBalance: number
+    commission: number
   }
   disputes: {
     total: number
     byStatus: Record<string, number>
     inPeriod: number
   }
-  trustWallet: { totalWalletBalance: number; totalLockedFunds: number }
+  wallets: {
+    runnerWalletTotal: number
+    customerWalletTotal: number
+    escrowTotal: number
+  }
+  workingCapital: {
+    totalLimit: number
+    totalUsed: number
+    avgUtilization: number
+  }
 }
 
 // ── Errand / Payment analytics (charts) ─────────────────────────────────────────
@@ -294,6 +305,102 @@ export interface PaymentAnalytics {
   }
 }
 
+export interface RunnerAnalytics {
+  summary: {
+    totalRunners: number
+    activeRunners: number
+    avgRating: number
+    avgCompletedErrands: number
+    totalCompletedErrands: number
+    totalWalletBalance: number
+    runnersWithDisputes: number
+  }
+  charts: {
+    levelDistribution: { type: string; title: string; data: ChartPoint[] }
+    ratingDistribution: { type: string; title: string; data: ChartPoint[] }
+    runnerGrowth: { type: string; title: string; data: ChartPoint[] }
+  }
+  topRunners: {
+    type: string
+    title: string
+    data: Array<{
+      _id: string
+      name: string
+      phone: string
+      level: number
+      rating: number
+      completedErrands: number
+      disputesAgainst: number
+      disputeRate: number
+      walletBalance: number
+      availableBalance: number
+      memberSince: string
+    }>
+  }
+  runnerDetail: unknown | null
+}
+
+export interface CustomerAnalytics {
+  summary: {
+    totalCustomers: number
+    activeCustomers: number
+    newInPeriod: number
+  }
+  charts: {
+    customerGrowth: { type: string; title: string; data: ChartPoint[] }
+    spendDistribution: { type: string; title: string; data: ChartPoint[] }
+  }
+  topCustomers: {
+    type: string
+    title: string
+    data: Array<{ name: string; phone: string; errandCount: number; totalSpend: number; avgSpend: number }>
+  }
+}
+
+export interface DisputeAnalytics {
+  summary: {
+    total: number
+    resolved: number
+    pending: number
+    inPeriod: number
+    resolutionRate: number
+    avgResolutionHours: number
+  }
+  charts: {
+    byStatus: { type: string; title: string; data: ChartPoint[] }
+    byOutcome: { type: string; title: string; data: ChartPoint[] }
+    timeSeries: { type: string; title: string; data: ChartPoint[] }
+  }
+}
+
+export interface LocationAnalytics {
+  summary: {
+    totalErrands: number
+    totalValue: number
+    activeRegions: number
+  }
+  charts: {
+    topRegions: { type: string; title: string; data: ChartPoint[] }
+    revenueByRegion: { type: string; title: string; data: ChartPoint[] }
+    growthTrend: { type: string; title: string; data: ChartPoint[] }
+  }
+}
+
+export interface VerificationAnalytics {
+  summary: {
+    total: number
+    pending: number
+    approved: number
+    rejected: number
+    resubmissionRequested: number
+    avgReviewHours: number
+  }
+  charts: {
+    byStatus: { type: string; title: string; data: ChartPoint[] }
+    timeSeries: { type: string; title: string; data: ChartPoint[] }
+  }
+}
+
 // ── Service areas ─────────────────────────────────────────────────────────────
 
 export type ZoneStatus = 'active' | 'inactive' | 'retired'
@@ -312,6 +419,63 @@ export interface ServiceArea {
   errandCount7d?: number
   createdAt: string
   updatedAt: string
+}
+
+// ── Reports (generated files) ────────────────────────────────────────────────
+
+export type ReportType =
+  | 'revenue'
+  | 'finance'
+  | 'transactions'
+  | 'customer_activity'
+  | 'runner_performance'
+  | 'errands'
+  | 'verification'
+  | 'withdrawals'
+  | 'disputes'
+  | 'locations'
+  | 'promo_codes'
+
+export type ReportFormat = 'pdf' | 'xlsx' | 'csv'
+export type ReportStatus = 'generating' | 'completed' | 'failed'
+
+export interface ReportFilters {
+  dateFrom?: string
+  dateTo?: string
+  period?: string
+  location?: string
+  runner?: string
+  customer?: string
+  status?: string
+}
+
+export interface GeneratedReport {
+  _id: string
+  name: string
+  type: ReportType
+  filters: ReportFilters
+  generatedBy: { _id: string; name: string } | null
+  generatedAt: string
+  filePath: string | null
+  fileFormat: ReportFormat
+  status: ReportStatus
+  errorMessage: string | null
+  createdAt: string
+}
+
+export interface LocationReportRow extends ServiceArea {
+  errandCount: number
+  revenue: number
+  growthTrend: ChartPoint[]
+}
+
+export interface VerificationReportRow {
+  _id: string
+  user: { _id: string; name: string; phone: string } | null
+  status: VerificationStatus
+  submittedAt: string
+  reviewedAt: string | null
+  reviewedBy: { id: string | null; name: string | null } | null
 }
 
 // ── System status ────────────────────────────────────────────────────────────

@@ -41,6 +41,15 @@ import type {
   SupportStatus,
   SupportPriority,
   SupportCategory,
+  RunnerAnalytics,
+  CustomerAnalytics,
+  DisputeAnalytics,
+  LocationAnalytics,
+  VerificationAnalytics,
+  GeneratedReport,
+  ReportType,
+  ReportFormat,
+  ReportFilters,
 } from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
@@ -187,6 +196,43 @@ export const fetchSystemStatus = async (): Promise<SystemStatusService[]> => {
     '/admin/system-status',
   )
   return data.data.services
+}
+
+export const fetchRunnerAnalytics = async (period = 'month', runner?: string): Promise<RunnerAnalytics> => {
+  const params = new URLSearchParams({ period })
+  if (runner) params.set('runner', runner)
+  const { data } = await api.get<{ status: string; data: RunnerAnalytics }>(
+    `/admin/analytics/runners?${params.toString()}`,
+  )
+  return data.data
+}
+
+export const fetchCustomerAnalytics = async (period = 'month'): Promise<CustomerAnalytics> => {
+  const { data } = await api.get<{ status: string; data: CustomerAnalytics }>(
+    `/admin/analytics/customers?period=${period}`,
+  )
+  return data.data
+}
+
+export const fetchDisputeAnalytics = async (period = 'month'): Promise<DisputeAnalytics> => {
+  const { data } = await api.get<{ status: string; data: DisputeAnalytics }>(
+    `/admin/analytics/disputes?period=${period}`,
+  )
+  return data.data
+}
+
+export const fetchLocationAnalytics = async (period = 'month'): Promise<LocationAnalytics> => {
+  const { data } = await api.get<{ status: string; data: LocationAnalytics }>(
+    `/admin/analytics/locations?period=${period}`,
+  )
+  return data.data
+}
+
+export const fetchVerificationAnalytics = async (period = 'month'): Promise<VerificationAnalytics> => {
+  const { data } = await api.get<{ status: string; data: VerificationAnalytics }>(
+    `/admin/analytics/verifications?period=${period}`,
+  )
+  return data.data
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -894,6 +940,53 @@ export const addSupportNote = async (id: string, note: string): Promise<SupportI
 export const fetchSupportDashboard = async (): Promise<SupportDashboardData> => {
   const { data } = await api.get<{ status: string; data: SupportDashboardData }>('/support/dashboard')
   return data.data
+}
+
+// ── Generated reports ─────────────────────────────────────────────────────────
+
+export interface GeneratedReportsQuery {
+  page?: number
+  limit?: number
+  type?: ReportType
+  status?: string
+}
+
+export const fetchGeneratedReports = async (
+  query: GeneratedReportsQuery = {},
+): Promise<PaginatedResponse<{ reports: GeneratedReport[] }>> => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.type) params.set('type', query.type)
+  if (query.status) params.set('status', query.status)
+
+  const { data } = await api.get<PaginatedResponse<{ reports: GeneratedReport[] }>>(
+    `/admin/reports/generated?${params.toString()}`,
+  )
+  return data
+}
+
+export const generateReport = async (payload: {
+  type: ReportType
+  format: ReportFormat
+  filters?: ReportFilters
+}): Promise<GeneratedReport> => {
+  const { data } = await api.post<{ status: string; data: { report: GeneratedReport } }>(
+    '/admin/reports/generated',
+    payload,
+  )
+  return data.data.report
+}
+
+export const downloadReport = async (id: string): Promise<string> => {
+  const { data } = await api.get<{ status: string; data: { url: string } }>(
+    `/admin/reports/generated/${id}/download`,
+  )
+  return data.data.url
+}
+
+export const deleteReport = async (id: string): Promise<void> => {
+  await api.delete(`/admin/reports/generated/${id}`)
 }
 
 export default api

@@ -40,9 +40,9 @@ interface NavItem {
 const DASHBOARD_ITEM: NavItem = { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
 
 // Items whose `to` has no matching <Route> yet (see App.tsx) are
-// placeholders — same convention already used for Promo Codes/Notifications/
-// Reports before this change: they render, sit in their section, and fall
-// through to the app's catch-all redirect until a real page exists.
+// placeholders — e.g. Promo Codes, Audit Logs: they render, sit in their
+// section, and fall through to the app's catch-all redirect until a real
+// page exists.
 const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Operations',
