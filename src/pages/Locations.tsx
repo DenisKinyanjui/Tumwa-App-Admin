@@ -521,7 +521,7 @@ export default function Locations() {
                       <LabelList
                         dataKey="count"
                         position="top"
-                        formatter={(v: React.ReactNode) => (typeof v === 'number' ? fmtCount(v) : v)}
+                        formatter={(v) => (typeof v === 'number' ? fmtCount(v) : v)}
                         style={{ fontSize: 11, fontWeight: 600, fill: '#6b7280' }}
                       />
                     </Bar>
