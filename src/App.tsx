@@ -27,6 +27,7 @@ import Settings from './pages/Settings'
 import Support from './pages/Support'
 import Analytics from './pages/Analytics'
 import Reports from './pages/Reports'
+import AuditLogs from './pages/AuditLogs'
 
 export default function App() {
   return (
@@ -61,6 +62,7 @@ export default function App() {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/reports" element={<Reports />} />
+                  <Route path="/audit-logs" element={<AuditLogs />} />
                 </Route>
               </Route>
 

@@ -16,7 +16,7 @@ import type {
   AdminDispute,
   ResolutionOutcome,
   AppSettings,
-  WorkingCapitalSettings,
+  AppSettingsPatch,
   ServiceArea,
   ZoneStatus,
   NotificationCampaign,
@@ -50,6 +50,12 @@ import type {
   ReportType,
   ReportFormat,
   ReportFilters,
+  AuditLogEntry,
+  AuditLogStats,
+  AuditSecurityInsight,
+  AuditModule,
+  AuditAction,
+  AuditSeverity,
 } from '../types'
 
 const TOKEN_KEY = 'tumwa_admin_token'
@@ -527,6 +533,16 @@ export const updateTerms = async (content: string): Promise<LegalContent> => {
   return data.data
 }
 
+export const fetchPrivacyPolicy = async (): Promise<LegalContent> => {
+  const { data } = await api.get<{ status: string; data: LegalContent }>('/admin/legal/privacy')
+  return data.data
+}
+
+export const updatePrivacyPolicy = async (content: string): Promise<LegalContent> => {
+  const { data } = await api.put<{ status: string; data: LegalContent }>('/admin/legal/privacy', { content })
+  return data.data
+}
+
 // ── App settings ──────────────────────────────────────────────────────────────
 
 export const fetchSettings = async (): Promise<AppSettings> => {
@@ -534,10 +550,10 @@ export const fetchSettings = async (): Promise<AppSettings> => {
   return data.data
 }
 
-export const updateSettings = async (
-  workingCapital: Partial<WorkingCapitalSettings>,
-): Promise<AppSettings> => {
-  const { data } = await api.patch<{ status: string; data: AppSettings }>('/admin/settings', { workingCapital })
+// Body may include any subset of settings groups, e.g. { workingCapital: {...} }
+// or { general: {...} } — the backend applies only the fields it recognises.
+export const updateSettings = async (patch: AppSettingsPatch): Promise<AppSettings> => {
+  const { data } = await api.patch<{ status: string; data: AppSettings }>('/admin/settings', patch)
   return data.data
 }
 
@@ -987,6 +1003,77 @@ export const downloadReport = async (id: string): Promise<string> => {
 
 export const deleteReport = async (id: string): Promise<void> => {
   await api.delete(`/admin/reports/generated/${id}`)
+}
+
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+
+export interface AuditLogsQuery {
+  page?: number
+  limit?: number
+  search?: string
+  module?: AuditModule | ''
+  action?: AuditAction | ''
+  severity?: AuditSeverity | ''
+  adminId?: string
+  status?: 'success' | 'failed' | ''
+  dateFrom?: string
+  dateTo?: string
+}
+
+const buildAuditParams = (query: AuditLogsQuery) => {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.search) params.set('search', query.search)
+  if (query.module) params.set('module', query.module)
+  if (query.action) params.set('action', query.action)
+  if (query.severity) params.set('severity', query.severity)
+  if (query.adminId) params.set('adminId', query.adminId)
+  if (query.status) params.set('status', query.status)
+  if (query.dateFrom) params.set('dateFrom', query.dateFrom)
+  if (query.dateTo) params.set('dateTo', query.dateTo)
+  return params
+}
+
+export const fetchAuditLogs = async (
+  query: AuditLogsQuery = {},
+): Promise<PaginatedResponse<{ logs: AuditLogEntry[] }>> => {
+  const { data } = await api.get<PaginatedResponse<{ logs: AuditLogEntry[] }>>(
+    `/admin/audit-logs?${buildAuditParams(query).toString()}`,
+  )
+  return data
+}
+
+export const fetchAuditLogById = async (id: string): Promise<AuditLogEntry> => {
+  const { data } = await api.get<{ status: string; data: { log: AuditLogEntry } }>(`/admin/audit-logs/${id}`)
+  return data.data.log
+}
+
+export const fetchAuditLogStats = async (
+  query: Pick<AuditLogsQuery, 'dateFrom' | 'dateTo'> = {},
+): Promise<AuditLogStats> => {
+  const { data } = await api.get<{ status: string; data: AuditLogStats }>(
+    `/admin/audit-logs/stats?${buildAuditParams(query).toString()}`,
+  )
+  return data.data
+}
+
+export const fetchAuditLogSecurityInsights = async (): Promise<AuditSecurityInsight[]> => {
+  const { data } = await api.get<{ status: string; data: { insights: AuditSecurityInsight[] } }>(
+    '/admin/audit-logs/security-insights',
+  )
+  return data.data.insights
+}
+
+export const fetchAuditLogOptions = async (): Promise<{
+  modules: AuditModule[]
+  actions: AuditAction[]
+  severities: AuditSeverity[]
+}> => {
+  const { data } = await api.get<{ status: string; data: { modules: AuditModule[]; actions: AuditAction[]; severities: AuditSeverity[] } }>(
+    '/admin/audit-logs/options',
+  )
+  return data.data
 }
 
 export default api

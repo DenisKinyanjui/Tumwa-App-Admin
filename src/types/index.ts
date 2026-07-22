@@ -28,10 +28,69 @@ export interface WorkingCapitalSettings {
   maxDisputeRateForIncrease: number
 }
 
+export interface GeneralSettings {
+  platformName: string
+  supportEmail: string
+  supportPhone: string
+  country: string
+  timezone: string
+}
+
+export interface PlatformSettings {
+  runnerRegistrationOpen: boolean
+  identityVerificationRequired: boolean
+  phoneVerificationRequired: boolean
+  platformCommission: number
+}
+
+export interface ErrandSettingsConfig {
+  maxErrandValue: number
+  minErrandValue: number
+  runnerAcceptanceTimeoutMin: number
+  customerConfirmationTimeoutHrs: number
+}
+
+export interface WalletsSettings {
+  customerWalletEnabled: boolean
+  customerWalletMaxBalance: number
+  escrowEnabled: boolean
+  escrowAutoReleaseHrs: number
+  runnerEarningsEnabled: boolean
+  runnerEarningsMinWithdrawal: number
+}
+
+export interface NotificationsSettings {
+  pushEnabled: boolean
+  smsEnabled: boolean
+  emailEnabled: boolean
+}
+
+export interface AuthenticationSettings {
+  requirePhoneVerification: boolean
+  requireIdentityVerification: boolean
+  adminTwoFactorEnabled: boolean
+}
+
 export interface AppSettings {
   workingCapital: WorkingCapitalSettings
+  general: GeneralSettings
+  platform: PlatformSettings
+  errandSettings: ErrandSettingsConfig
+  wallets: WalletsSettings
+  notifications: NotificationsSettings
+  authentication: AuthenticationSettings
   updatedAt: string | null
 }
+
+export type AppSettingsPatch = Partial<{
+  workingCapital: Partial<WorkingCapitalSettings>
+  general: Partial<GeneralSettings>
+  platform: Partial<PlatformSettings>
+  errandSettings: Partial<ErrandSettingsConfig>
+  wallets: Partial<WalletsSettings>
+  notifications: Partial<NotificationsSettings>
+  authentication: Partial<AuthenticationSettings>
+}>
 
 export interface AdminUser {
   _id: string
@@ -435,6 +494,7 @@ export type ReportType =
   | 'disputes'
   | 'locations'
   | 'promo_codes'
+  | 'audit_logs'
 
 export type ReportFormat = 'pdf' | 'xlsx' | 'csv'
 export type ReportStatus = 'generating' | 'completed' | 'failed'
@@ -447,6 +507,10 @@ export interface ReportFilters {
   runner?: string
   customer?: string
   status?: string
+  module?: string
+  action?: string
+  severity?: string
+  adminId?: string
 }
 
 export interface GeneratedReport {
@@ -737,4 +801,52 @@ export interface SupportDashboardData {
     resolvedToday: number
   }
   channels: Record<SupportChannel, number>
+}
+
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+
+export type AuditModule =
+  | 'Users' | 'Runners' | 'Errands' | 'Transactions' | 'Withdrawals' | 'Verification'
+  | 'Working Capital' | 'Customer Wallet' | 'Escrow' | 'Disputes' | 'Notifications'
+  | 'Announcements' | 'Locations' | 'Reports' | 'Analytics' | 'Promo Codes' | 'Settings' | 'Admin Users'
+
+export type AuditAction =
+  | 'Created' | 'Updated' | 'Deleted' | 'Approved' | 'Rejected' | 'Suspended'
+  | 'Activated' | 'Refunded' | 'Login' | 'Logout' | 'Password Reset' | 'Settings Changed'
+
+export type AuditSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
+export type AuditStatus = 'success' | 'failed'
+
+export interface AuditLogEntry {
+  _id: string
+  actor: { id: string; name: string; email: string | null; role: string }
+  action: AuditAction
+  module: AuditModule
+  severity: AuditSeverity
+  target: { type: string | null; id: string | null; label: string | null } | null
+  changes: { before: unknown; after: unknown } | null
+  reason: string | null
+  requestId: string | null
+  ip: string | null
+  device: { browser: string | null; os: string | null; device: string | null; userAgent: string | null } | null
+  sessionId: string | null
+  status: AuditStatus
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AuditLogStats {
+  totalEvents: number
+  eventsToday: number
+  highRiskEvents: number
+  failedActions: number
+  mostActiveAdmin: { id: string; name: string; count: number } | null
+}
+
+export interface AuditSecurityInsight {
+  id: string
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  description: string
 }
